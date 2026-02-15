@@ -253,10 +253,35 @@ def _normalise_phone(raw: str) -> str:
     return "+" + digits if has_plus else digits
 
 
+
+def _is_boilerplate_number(digits: str) -> bool:
+    """
+    Returns True if the digit string is a boilerplate/placeholder pattern:
+    - Sequential ascending (123456...)
+    - Sequential descending (987654...)
+    - All same digit (111111...)
+    - Short repeating pattern (e.g. 12341234, period <= 4)
+    """
+    if len(set(digits)) == 1:
+        return True  # all same digit
+    # Ascending/descending sequence
+    asc = ''.join(str((int(digits[0]) + i) % 10) for i in range(len(digits)))
+    desc = ''.join(str((int(digits[0]) - i) % 10) for i in range(len(digits)))
+    if digits == asc or digits == desc:
+        return True
+    # Short repeating pattern (period <= 4)
+    for period in range(1, 5):
+        if len(digits) % period == 0:
+            pat = digits[:period]
+            if pat * (len(digits) // period) == digits:
+                return True
+    return False
+
 def _extract_bank_accounts(text: str) -> list[str]:
     """
     Extract digit sequences that look like bank account numbers,
     but only if banking-related keywords appear within a 80-char window.
+    Rejects boilerplate/placeholder numbers (e.g. 1234567890123456).
     """
     results: set[str] = set()
     for match in _BANK_ACCOUNT_DIGITS.finditer(text):
@@ -264,11 +289,11 @@ def _extract_bank_accounts(text: str) -> list[str]:
         digits = re.sub(r'\D', '', raw)
         if not (9 <= len(digits) <= 18):
             continue
-
+        if _is_boilerplate_number(digits):
+            continue
         start = max(0, match.start() - 120)
         end = min(len(text), match.end() + 120)
         window = text[start:end]
-
         if _BANK_CONTEXT_KEYWORDS.search(window):
             results.add(digits)
     return list(results)
