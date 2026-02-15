@@ -159,6 +159,13 @@ async def honeypot(request: HoneypotRequest):
             )
 
 
+# Alias — GUVI evaluator sends to /api/message
+@app.post("/api/message", response_model=HoneypotResponse)
+async def api_message(request: HoneypotRequest):
+    """Alias for /honeypot — the GUVI evaluation platform uses this path."""
+    return await honeypot(request)
+
+
 async def _process_turn(request: HoneypotRequest) -> str:
     """Core processing pipeline for a single turn."""
 

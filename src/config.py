@@ -12,16 +12,16 @@ API_KEY = os.getenv("API_KEY", "default-dev-key")
 
 # --- LLM Provider Keys ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # --- Gemini Model Names ---
 GEMINI_ANALYST_MODEL = os.getenv("GEMINI_ANALYST_MODEL", "gemini-2.5-flash")
-GEMINI_PERSONA_MODEL = os.getenv("GEMINI_PERSONA_MODEL", "gemini-2.5-pro")
+GEMINI_PERSONA_MODEL = os.getenv("GEMINI_PERSONA_MODEL", "gemini-2.5-flash")
 GEMINI_TRANSLATOR_MODEL = os.getenv("GEMINI_TRANSLATOR_MODEL", "gemini-2.5-flash")
 
-# --- OpenAI Fallback Model Names ---
-OPENAI_ANALYST_MODEL = os.getenv("OPENAI_ANALYST_MODEL", "gpt-4o-mini")
-OPENAI_PERSONA_MODEL = os.getenv("OPENAI_PERSONA_MODEL", "gpt-4o")
+# --- Groq Fallback Model Names ---
+GROQ_ANALYST_MODEL = os.getenv("GROQ_ANALYST_MODEL", "llama-3.3-70b-versatile")
+GROQ_PERSONA_MODEL = os.getenv("GROQ_PERSONA_MODEL", "llama-3.3-70b-versatile")
 
 # --- Callback URLs ---
 GUVI_CALLBACK_URL_1 = os.getenv(
