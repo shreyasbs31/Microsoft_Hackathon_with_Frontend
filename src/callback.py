@@ -36,26 +36,39 @@ def build_callback_payload(session: HoneypotSession) -> dict:
 
     total_messages = session.turn_count * 2  # each turn = 1 scammer + 1 user
 
+    # Deduplicate all intel fields from DB using sorted sets
+    phone_numbers = sorted(set(session.get_phone_numbers()))
+    bank_accounts = sorted(set(session.get_bank_accounts()))
+    upi_ids = sorted(set(session.get_upi_ids()))
+    phishing_links = sorted(set(session.get_urls()))
+    email_addresses = sorted(set(session.get_email_addresses()))
+    ifsc_codes = sorted(set(session.get_ifsc_codes()))
+    suspicious_keywords = sorted(set(session.get_suspicious_keywords()))
+
+    # Ensure IFSC codes appear in agent_notes (not in suspiciousKeywords)
+    agent_notes = session.agent_notes or ""
+    if ifsc_codes:
+        ifsc_note = "IFSC codes found: " + ", ".join(ifsc_codes)
+        if ifsc_note not in agent_notes:
+            agent_notes = (agent_notes + "\n" + ifsc_note).strip()
+
     payload = {
         "sessionId": session.session_id,
         "scamDetected": True,  # Always true at callback time
         "totalMessagesExchanged": total_messages,
         "extractedIntelligence": {
-            "phoneNumbers": session.get_phone_numbers(),
-            "bankAccounts": session.get_bank_accounts(),
-            "upiIds": session.get_upi_ids(),
-            "phishingLinks": session.get_urls(),
-            "emailAddresses": session.get_email_addresses(),
-            "suspiciousKeywords": (
-                session.get_suspicious_keywords()
-                + session.get_ifsc_codes()  # IFSC codes go into suspiciousKeywords
-            ),
+            "phoneNumbers": phone_numbers,
+            "bankAccounts": bank_accounts,
+            "upiIds": upi_ids,
+            "phishingLinks": phishing_links,
+            "emailAddresses": email_addresses,
+            "suspiciousKeywords": suspicious_keywords,
         },
         "engagementMetrics": {
             "engagementDurationSeconds": round(duration_seconds, 2),
             "totalMessagesExchanged": total_messages,
         },
-        "agentNotes": session.agent_notes or "Honeypot engagement completed.",
+        "agentNotes": agent_notes or "Honeypot engagement completed.",
         "status": "completed",
     }
     return payload

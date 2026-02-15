@@ -25,7 +25,7 @@ from src.models import (
     init_db,
 )
 from src.session_lock import session_lock_manager
-from src.extractor import extract_intelligence, merge_intelligence, normalise_text
+from src.extractor import extract_intelligence_regex, extract_misc_notes, merge_intelligence, normalise_text
 from src.analyst import analyse_message
 from src.persona import generate_response
 from src.translator import translate_to_english
@@ -224,8 +224,26 @@ async def _process_turn(request: HoneypotRequest) -> str:
             session.first_message_timestamp = msg_timestamp
         session.last_message_timestamp = msg_timestamp
 
-        # ---- C. Regex extraction on current message ----
-        new_intel = extract_intelligence(normalised_text)
+        # ---- C. Regex extraction for structured fields ----
+        new_intel = extract_intelligence_regex(normalised_text)
+
+        # ---- C2. LLM extraction for misc contextual notes ----
+        misc_notes = await extract_misc_notes(normalised_text)
+        if misc_notes:
+            existing_notes = session.agent_notes or ""
+            session.agent_notes = (
+                existing_notes + "\n" + misc_notes
+            ).strip()
+
+        # ---- C3. IFSC codes → agent_notes ----
+        if new_intel.ifsc_codes:
+            ifsc_note = "IFSC codes found: " + ", ".join(new_intel.ifsc_codes)
+            existing_notes = session.agent_notes or ""
+            # Only append if not already present
+            if ifsc_note not in existing_notes:
+                session.agent_notes = (
+                    existing_notes + "\n" + ifsc_note
+                ).strip()
 
         # ---- D. Merge intel with session data ----
         existing_intel = {
@@ -273,13 +291,12 @@ async def _process_turn(request: HoneypotRequest) -> str:
             elif analysis.status == "LEGIT":
                 session.status = SessionStatus.LEGIT
 
-            # Append reasoning to agent notes
-            existing_notes = session.agent_notes or ""
-            session.agent_notes = (
-                existing_notes
-                + f"\n[Turn {session.turn_count + 1} Analyst] "
-                + analysis.reasoning
-            ).strip()
+            # Append analyst reasoning to agent notes
+            if analysis.reasoning:
+                existing_notes = session.agent_notes or ""
+                session.agent_notes = (
+                    existing_notes + "\n" + analysis.reasoning
+                ).strip()
 
         # ---- G. Generate persona response ----
         agent_state = session.get_agent_state()

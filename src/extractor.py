@@ -1,17 +1,18 @@
 """
-Regex-based intelligence extractor.
+Intelligence extractor — regex for structured fields, LLM for misc notes.
 
-Runs on every incoming scammer message to extract:
-- Phone numbers (Indian & international)
-- Bank account numbers (with contextual keyword matching)
-- UPI IDs
-- URLs / phishing links
-- Email addresses
-- IFSC codes
+Uses regex patterns to reliably extract structured data (phones, banks,
+UPIs, URLs, emails, IFSC codes, keywords). Uses an LLM call to extract
+miscellaneous contextual intelligence (names, orgs, threats, etc.) that
+gets appended to agent_notes.
 """
 
+import json
+import logging
 import re
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -26,8 +27,54 @@ class ExtractedIntelligence:
 
 
 # ---------------------------------------------------------------------------
-# Regex patterns
+# LLM-based misc-notes extraction
 # ---------------------------------------------------------------------------
+
+_MISC_NOTES_SYSTEM_PROMPT = """\
+You are a forensic analyst reviewing a scammer's message in a honeypot investigation.
+
+Your ONLY job is to extract **contextual intelligence** that is NOT a phone number,
+bank account, UPI ID, URL, email, IFSC code, or keyword. Those are handled separately.
+
+Focus on:
+- Names of people or organisations mentioned or impersonated
+- Physical addresses or locations
+- App names, platform names
+- Reference / transaction / case IDs
+- Threats made or pressure tactics described
+- Impersonated entities (banks, government bodies, companies)
+- Any other notable contextual detail
+
+Respond with a SHORT, factual, single-paragraph summary (1-3 sentences).
+If there is nothing noteworthy beyond the structured fields, respond with exactly: NONE"""
+
+
+async def extract_misc_notes(text: str) -> str:
+    """
+    Call the LLM to extract miscellaneous contextual intelligence.
+    Returns a short summary string, or empty string on failure / nothing found.
+    """
+    from src.llm_client import call_llm
+
+    try:
+        raw = await call_llm(
+            role="extractor",
+            system_prompt=_MISC_NOTES_SYSTEM_PROMPT,
+            user_prompt=f"Analyse this scammer message:\n\n{text}",
+            json_mode=False,
+        )
+        raw = raw.strip()
+        if raw.upper() == "NONE" or not raw:
+            return ""
+        return raw
+    except Exception as exc:
+        logger.warning("LLM misc-notes extraction failed: %s", exc)
+        return ""
+
+
+# =========================================================================
+# REGEX FALLBACK  (original implementation)
+# =========================================================================
 
 # Indian mobile: +91-XXXXXXXXXX or 91XXXXXXXXXX or XXXXXXXXXX (starts with 6-9)
 _PHONE_INDIA = re.compile(
@@ -84,10 +131,6 @@ _SCAM_KEYWORDS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Normalisation helpers
-# ---------------------------------------------------------------------------
-
 def normalise_text(text: str) -> str:
     """Strip excess whitespace and decode common URL-encoded characters."""
     import urllib.parse
@@ -96,13 +139,10 @@ def normalise_text(text: str) -> str:
     return text
 
 
-# ---------------------------------------------------------------------------
-# Core extraction
-# ---------------------------------------------------------------------------
-
-def extract_intelligence(text: str) -> ExtractedIntelligence:
+def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
     """
     Run all regex patterns against *text* and return structured results.
+    Used as fallback when LLM extraction fails.
     """
     result = ExtractedIntelligence()
 
@@ -123,7 +163,6 @@ def extract_intelligence(text: str) -> ExtractedIntelligence:
         phones.add(_normalise_phone(m))
     for m in _PHONE_INTL.findall(text):
         normalised = _normalise_phone(m)
-        # Avoid capturing bank-account-length digit strings as phones
         if len(re.sub(r'\D', '', normalised)) <= 13:
             phones.add(normalised)
     result.phone_numbers = list(phones)
@@ -149,7 +188,6 @@ def extract_intelligence(text: str) -> ExtractedIntelligence:
 def _normalise_phone(raw: str) -> str:
     """Normalise a phone string: strip spaces/dashes, keep + prefix."""
     cleaned = re.sub(r'[().\s]', '', raw)
-    # Normalise dashes: keep only one at country-code boundary
     cleaned = re.sub(r'-+', '-', cleaned)
     return cleaned
 
@@ -169,17 +207,13 @@ def _extract_bank_accounts(text: str) -> list[str]:
     return list(results)
 
 
-# ---------------------------------------------------------------------------
-# Merge / deduplicate helpers
-# ---------------------------------------------------------------------------
-
 def merge_intelligence(
     existing: dict[str, list],
     new: ExtractedIntelligence,
 ) -> dict[str, list]:
     """
     Merge newly extracted intel into existing session intel.
-    Returns a new dict with deduplicated lists.
+    Returns a new dict with deduplicated, sorted lists.
     """
     merged: dict[str, list] = {}
     for key in (
@@ -188,5 +222,5 @@ def merge_intelligence(
     ):
         existing_set = set(existing.get(key, []))
         new_set = set(getattr(new, key, []))
-        merged[key] = list(existing_set | new_set)
+        merged[key] = sorted(existing_set | new_set)
     return merged

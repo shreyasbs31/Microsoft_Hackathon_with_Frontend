@@ -22,6 +22,7 @@ from src.config import (
     GEMINI_ANALYST_MODEL,
     GEMINI_PERSONA_MODEL,
     GEMINI_TRANSLATOR_MODEL,
+    GEMINI_EXTRACTOR_MODEL,
     GROQ_ANALYST_MODEL,
     GROQ_PERSONA_MODEL,
     LLM_TIMEOUT_SECONDS,
@@ -51,7 +52,7 @@ else:
 # Model mapping — ordered fallback lists
 # ---------------------------------------------------------------------------
 
-Role = Literal["analyst", "persona", "translator"]
+Role = Literal["analyst", "persona", "translator", "extractor"]
 
 # Each role has a PRIMARY model (from config) and fallback options
 _GEMINI_MODEL_FALLBACKS: dict[Role, list[str]] = {
@@ -75,12 +76,19 @@ _GEMINI_MODEL_FALLBACKS: dict[Role, list[str]] = {
         "gemini-2.0-flash-lite",
         "gemini-1.5-flash",
     ],
+    "extractor": [
+        GEMINI_EXTRACTOR_MODEL,
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+        "gemini-1.5-flash",
+    ],
 }
 
 _GROQ_MODELS: dict[Role, str] = {
     "analyst": GROQ_ANALYST_MODEL,
     "persona": GROQ_PERSONA_MODEL,
-    "translator": GROQ_ANALYST_MODEL,  # translator uses the same model
+    "translator": GROQ_ANALYST_MODEL,
+    "extractor": GROQ_ANALYST_MODEL,
 }
 
 # Cache: once a model works for a role, remember it

@@ -18,6 +18,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GEMINI_ANALYST_MODEL = os.getenv("GEMINI_ANALYST_MODEL", "gemini-2.5-flash")
 GEMINI_PERSONA_MODEL = os.getenv("GEMINI_PERSONA_MODEL", "gemini-2.5-flash")
 GEMINI_TRANSLATOR_MODEL = os.getenv("GEMINI_TRANSLATOR_MODEL", "gemini-2.5-flash")
+GEMINI_EXTRACTOR_MODEL = os.getenv("GEMINI_EXTRACTOR_MODEL", "gemini-2.0-flash")
 
 # --- Groq Fallback Model Names ---
 GROQ_ANALYST_MODEL = os.getenv("GROQ_ANALYST_MODEL", "llama-3.3-70b-versatile")
