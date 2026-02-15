@@ -76,33 +76,52 @@ async def extract_misc_notes(text: str) -> str:
 # REGEX FALLBACK  (original implementation)
 # =========================================================================
 
-# Indian mobile: +91-XXXXXXXXXX or 91XXXXXXXXXX or XXXXXXXXXX (starts with 6-9)
+# Indian mobile: optional +91/91 prefix, 10 digits starting with 6-9
+# Allows spaces, dots, hyphens between digit groups
 _PHONE_INDIA = re.compile(
-    r'(?:\+?91[-.\s]?)?[6-9]\d{9}\b'
+    r'(?<!\d)(?:\+?91[-.\s]?)?[6-9][\d\s.\-]{8,13}\d(?!\d)'
 )
-# International: +CC-NNN-NNN-NNNN style
+# International: requires explicit + prefix, then 8-15 total digits
 _PHONE_INTL = re.compile(
-    r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
+    r'\+\d[\d\s.\-]{5,18}\d(?!\d)'
 )
 
-# UPI ID: user@provider  (known Indian UPI suffixes)
+# UPI ID: user@provider  (known Indian UPI suffixes + general fallback)
 _UPI_SUFFIXES = (
     "upi", "paytm", "ybl", "oksbi", "okaxis", "okicici", "okhdfcbank",
     "fbl", "ibl", "axl", "sbi", "apl", "boi", "cnrb", "csbpay", "dlb",
     "federal", "idbi", "indus", "kbl", "kotak", "mahb", "pnb", "rbl",
     "uco", "union", "united", "vijb", "dbs", "fakebank", "fakeupi",
     "gpay", "amazonpay", "axisbank", "icici", "hdfcbank",
+    "yesbank", "yesbankltd", "airtel", "bhim", "postbank", "jupiteraxis",
+    "slice", "fam", "idfcfirst", "rblbank", "aubank", "equitas",
+    "bandhan", "citi", "dbs", "hsbc", "scb", "barb", "abfspay",
+    "waaxis", "wahdfcbank", "waicici", "wasbi",
 )
-_UPI_PATTERN = re.compile(
-    r'\b[\w.\-]+@(?:' + '|'.join(_UPI_SUFFIXES) + r')\b',
+# Known suffix pattern (high confidence)
+_UPI_KNOWN = re.compile(
+    r'\b[\w.\-]+@(?:' + '|'.join(_UPI_SUFFIXES) + r')\b(?!\.[a-zA-Z]{2,})',
+    re.IGNORECASE,
+)
+# General fallback: word@word without a TLD (catches unknown UPI providers)
+_UPI_GENERAL = re.compile(
+    r'\b[\w.\-]+@[a-zA-Z][a-zA-Z0-9]{1,20}\b(?!\.[a-zA-Z]{2,})',
     re.IGNORECASE,
 )
 
-# URLs
+# URLs (normal + defanged + shorteners)
 _URL_PATTERN = re.compile(
-    r'https?://[^\s<>"\']+|www\.[^\s<>"\']+',
+    r'(?:https?|hxxps?|h\[tt\]ps?)://[^\s<>"\']+'
+    r'|www\.[^\s<>"\']+'
+    r'|\b(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|buff\.ly|ow\.ly|rb\.gy)[/\\][^\s<>"\']+',
     re.IGNORECASE,
 )
+# Defanged notation normaliser: hxxp -> http, [.] -> .
+def _deobfuscate_url(url: str) -> str:
+    url = re.sub(r'hxxp', 'http', url, flags=re.IGNORECASE)
+    url = re.sub(r'h\[tt\]p', 'http', url, flags=re.IGNORECASE)
+    url = url.replace('[.]', '.').replace('[:]', ':')
+    return url
 
 # Email (generic)
 _EMAIL_PATTERN = re.compile(
@@ -114,8 +133,8 @@ _IFSC_PATTERN = re.compile(
     r'\b[A-Z]{4}0[A-Z0-9]{6}\b'
 )
 
-# Bank account number: 9-18 digits only near banking context keywords
-_BANK_ACCOUNT_DIGITS = re.compile(r'\b\d{9,18}\b')
+# Bank account number: 9-18 digits, allow spaces/dashes in between
+_BANK_ACCOUNT_DIGITS = re.compile(r'\b(?:\d[\s-]?){9,18}\d\b')
 _BANK_CONTEXT_KEYWORDS = re.compile(
     r'account|a/c|acc\b|bank|number|no\.|credit|debit|savings|current',
     re.IGNORECASE,
@@ -147,7 +166,11 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
     result = ExtractedIntelligence()
 
     # 1. UPI IDs  (extract first so we can exclude from emails)
-    upi_matches = _UPI_PATTERN.findall(text)
+    # Known-suffix matches (high confidence) + general fallback
+    upi_matches: list[str] = _UPI_KNOWN.findall(text)
+    for candidate in _UPI_GENERAL.findall(text):
+        if candidate.lower() not in {m.lower() for m in upi_matches}:
+            upi_matches.append(candidate)
     result.upi_ids = list(set(upi_matches))
     upi_set = set(m.lower() for m in upi_matches)
 
@@ -157,24 +180,45 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
         set(e for e in email_matches if e.lower() not in upi_set)
     )
 
-    # 3. Phone numbers
+    # 3. Phone numbers (Indian + international formats)
     phones: set[str] = set()
-    for m in _PHONE_INDIA.findall(text):
-        phones.add(_normalise_phone(m))
-    for m in _PHONE_INTL.findall(text):
-        normalised = _normalise_phone(m)
-        if len(re.sub(r'\D', '', normalised)) <= 13:
+    for m in _PHONE_INDIA.finditer(text):
+        normalised = _normalise_phone(m.group())
+        digit_count = len(re.sub(r'\D', '', normalised))
+        if 10 <= digit_count <= 12:  # Indian: 10 digits, or 12 with 91 prefix
+            phones.add(normalised)
+    for m in _PHONE_INTL.finditer(text):
+        normalised = _normalise_phone(m.group())
+        digit_count = len(re.sub(r'\D', '', normalised))
+        if 8 <= digit_count <= 15:
             phones.add(normalised)
     result.phone_numbers = list(phones)
 
-    # 4. URLs
-    result.urls = list(set(_URL_PATTERN.findall(text)))
+    # 4. URLs (deobfuscate defanged notation)
+    raw_urls = _URL_PATTERN.findall(text)
+    result.urls = list(set(_deobfuscate_url(u) for u in raw_urls))
 
     # 5. IFSC codes
     result.ifsc_codes = list(set(_IFSC_PATTERN.findall(text)))
 
     # 6. Bank account numbers  (contextual)
     result.bank_accounts = _extract_bank_accounts(text)
+
+    # 6b. Cross-deconflict phones ↔ bank accounts ↔ UPI
+    phone_digit_set = {re.sub(r'\D', '', p) for p in result.phone_numbers}
+    upi_locals = {u.split('@')[0] for u in result.upi_ids if '@' in u}
+
+    # Remove bank accounts whose digits match a phone number
+    result.bank_accounts = [
+        a for a in result.bank_accounts
+        if re.sub(r'\D', '', a) not in phone_digit_set
+    ]
+
+    # Remove phones that are UPI local parts
+    result.phone_numbers = [
+        p for p in result.phone_numbers
+        if re.sub(r'\D', '', p) not in upi_locals
+    ]
 
     # 7. Suspicious keywords
     text_lower = text.lower()
@@ -186,10 +230,27 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
 
 
 def _normalise_phone(raw: str) -> str:
-    """Normalise a phone string: strip spaces/dashes, keep + prefix."""
-    cleaned = re.sub(r'[().\s]', '', raw)
-    cleaned = re.sub(r'-+', '-', cleaned)
-    return cleaned
+    """Normalise a phone string to canonical format.
+    Indian numbers → +91-XXXXXXXXXX
+    International numbers → +CC-remaining digits
+    Local numbers → digits only
+    """
+    raw = raw.strip()
+    has_plus = raw.startswith("+")
+    digits = re.sub(r'\D', '', raw)
+
+    # Indian number: 10 digits starting with 6-9, or 12 digits with 91 prefix
+    if len(digits) == 12 and digits.startswith("91") and digits[2] in "6789":
+        return "+91-" + digits[2:]
+    if len(digits) == 10 and digits[0] in "6789":
+        return "+91-" + digits
+    # International with + prefix
+    if has_plus and len(digits) >= 8:
+        cc = digits[:2] if len(digits) <= 12 else digits[:3]
+        rest = digits[len(cc):]
+        return "+" + cc + "-" + rest
+    # Fallback: return digits with + if originally present
+    return "+" + digits if has_plus else digits
 
 
 def _extract_bank_accounts(text: str) -> list[str]:
@@ -199,11 +260,17 @@ def _extract_bank_accounts(text: str) -> list[str]:
     """
     results: set[str] = set()
     for match in _BANK_ACCOUNT_DIGITS.finditer(text):
-        start = max(0, match.start() - 80)
-        end = min(len(text), match.end() + 80)
+        raw = match.group()
+        digits = re.sub(r'\D', '', raw)
+        if not (9 <= len(digits) <= 18):
+            continue
+
+        start = max(0, match.start() - 120)
+        end = min(len(text), match.end() + 120)
         window = text[start:end]
+
         if _BANK_CONTEXT_KEYWORDS.search(window):
-            results.add(match.group())
+            results.add(digits)
     return list(results)
 
 

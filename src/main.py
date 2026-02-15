@@ -169,6 +169,15 @@ async def api_message(request: HoneypotRequest):
 async def _process_turn(request: HoneypotRequest) -> str:
     """Core processing pipeline for a single turn."""
 
+    def _append_agent_note(existing: str, note: str) -> str:
+        note = (note or "").strip()
+        if not note:
+            return existing
+        if note in existing:
+            return existing
+        sep = " " if existing else ""
+        return (existing + sep + note).strip()
+
     db = SessionLocal()
     try:
         # ---- A. Load or create session ----
@@ -211,12 +220,17 @@ async def _process_turn(request: HoneypotRequest) -> str:
         # ---- Track timestamps ----
         msg_timestamp = request.message.timestamp
         if isinstance(msg_timestamp, str):
-            try:
-                from datetime import datetime
-                dt = datetime.fromisoformat(msg_timestamp.replace("Z", "+00:00"))
-                msg_timestamp = int(dt.timestamp() * 1000)
-            except Exception:
-                msg_timestamp = int(time.time() * 1000)
+            # Try numeric epoch string first (e.g. "1770005528731")
+            stripped = msg_timestamp.strip()
+            if stripped.isdigit():
+                msg_timestamp = int(stripped)
+            else:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(stripped.replace("Z", "+00:00"))
+                    msg_timestamp = int(dt.timestamp() * 1000)
+                except Exception:
+                    msg_timestamp = int(time.time() * 1000)
         elif msg_timestamp is None:
             msg_timestamp = int(time.time() * 1000)
 
@@ -231,19 +245,13 @@ async def _process_turn(request: HoneypotRequest) -> str:
         misc_notes = await extract_misc_notes(normalised_text)
         if misc_notes:
             existing_notes = session.agent_notes or ""
-            session.agent_notes = (
-                existing_notes + "\n" + misc_notes
-            ).strip()
+            session.agent_notes = _append_agent_note(existing_notes, misc_notes)
 
         # ---- C3. IFSC codes → agent_notes ----
         if new_intel.ifsc_codes:
             ifsc_note = "IFSC codes found: " + ", ".join(new_intel.ifsc_codes)
             existing_notes = session.agent_notes or ""
-            # Only append if not already present
-            if ifsc_note not in existing_notes:
-                session.agent_notes = (
-                    existing_notes + "\n" + ifsc_note
-                ).strip()
+            session.agent_notes = _append_agent_note(existing_notes, ifsc_note)
 
         # ---- D. Merge intel with session data ----
         existing_intel = {
@@ -294,9 +302,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
             # Append analyst reasoning to agent notes
             if analysis.reasoning:
                 existing_notes = session.agent_notes or ""
-                session.agent_notes = (
-                    existing_notes + "\n" + analysis.reasoning
-                ).strip()
+                session.agent_notes = _append_agent_note(existing_notes, analysis.reasoning)
 
         # ---- G. Generate persona response ----
         agent_state = session.get_agent_state()

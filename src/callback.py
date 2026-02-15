@@ -34,6 +34,11 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     last_ts = session.last_message_timestamp or 0
     duration_seconds = max(0, (last_ts - first_ts) / 1000) if first_ts else 0
 
+    # Fallback: if timestamps are identical/missing but conversation happened,
+    # estimate ~15 seconds per turn
+    if duration_seconds == 0 and session.turn_count > 1:
+        duration_seconds = session.turn_count * 15
+
     total_messages = session.turn_count * 2  # each turn = 1 scammer + 1 user
 
     # Deduplicate all intel fields from DB using sorted sets
@@ -50,7 +55,10 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     if ifsc_codes:
         ifsc_note = "IFSC codes found: " + ", ".join(ifsc_codes)
         if ifsc_note not in agent_notes:
-            agent_notes = (agent_notes + "\n" + ifsc_note).strip()
+            agent_notes = (agent_notes + " " + ifsc_note).strip()
+
+    # Remove newlines from agent notes
+    agent_notes = agent_notes.replace("\n", " ").strip()
 
     payload = {
         "sessionId": session.session_id,

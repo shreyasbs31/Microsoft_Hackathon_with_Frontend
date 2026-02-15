@@ -156,7 +156,7 @@ async def generate_response(
         for msg in conversation_history:
             sender = msg.get("sender", "unknown")
             text = msg.get("text", "")
-            role_label = "Scammer" if sender == "scammer" else "You"
+            role_label = "You" if sender == "user" else "Scammer"
             parts.append(f"[{role_label}]: {text}")
 
     parts.append(f"\n=== LATEST SCAMMER MESSAGE ===\n{current_message}")
