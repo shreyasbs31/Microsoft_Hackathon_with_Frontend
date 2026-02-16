@@ -25,7 +25,14 @@ from src.models import (
     init_db,
 )
 from src.session_lock import session_lock_manager
-from src.extractor import extract_intelligence_regex, extract_misc_notes, merge_intelligence, normalise_text
+from src.extractor import (
+    extract_intelligence_regex,
+    extract_misc_notes,
+    merge_intelligence,
+    normalise_text,
+    detect_denials,
+    adjust_counts_for_denials,
+)
 from src.analyst import analyse_message
 from src.persona import generate_response
 from src.translator import translate_to_english
@@ -337,13 +344,35 @@ async def _process_turn(request: HoneypotRequest) -> str:
         last_approach = agent_state.get("last_approach", "")
 
         try:
+            # Detect explicit denials in recent scammer messages and current text
+            denied_fields: set[str] = set()
+            # Check the translated/current message
+            denied_fields |= detect_denials(analysis_text)
+            # Also scan the last few scammer messages from the conversation history
+            try:
+                conv = request.conversationHistory or []
+                # Check up to last 3 scammer messages for explicit denials
+                scammer_msgs = [m for m in conv if (m.get("sender") or "").lower() == "scammer"]
+                for m in scammer_msgs[-3:]:
+                    denied_fields |= detect_denials(m.get("text", ""))
+            except Exception:
+                pass
+
+            if denied_fields:
+                # Persist a short agent note about the denial for auditing
+                existing_notes = session.agent_notes or ""
+                denial_readable = ", ".join(sorted(denied_fields))
+                session.agent_notes = _append_agent_note(existing_notes, f"Scammer denied sharing: {denial_readable}")
+
+            adjusted_counts = adjust_counts_for_denials(session.intel_counts(), denied_fields)
+
             reply, approach_summary = await generate_response(
                 current_message=analysis_text,
                 conversation_history=request.conversationHistory,
                 session_status=session.status.value,
                 scam_type=session.scam_type,
                 turn_count=session.turn_count + 1,
-                intel_counts=session.intel_counts(),
+                intel_counts=adjusted_counts,
                 last_approach=last_approach,
                 language=language,
             )

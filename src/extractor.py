@@ -152,6 +152,67 @@ _SCAM_KEYWORDS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Denial detection (explicit refusal phrases -> map to intel keys)
+# ---------------------------------------------------------------------------
+
+_DENIAL_PATTERNS: dict[str, re.Pattern] = {
+    "email_addresses": re.compile(
+        r"\b(no e-?mail|cannot e-?mail|we cannot email|email isn't allowed|email is not allowed|no email address|don't have an email|cannot provide an email)\b",
+        re.IGNORECASE,
+    ),
+    "phone_numbers": re.compile(
+        r"\b(no phone|can't call|cannot call|won't share number|can't share number|no phone number|don't have a phone)\b",
+        re.IGNORECASE,
+    ),
+    "bank_accounts": re.compile(
+        r"\b(no account|can't share account|cannot share account|won't share account|don't have account)\b",
+        re.IGNORECASE,
+    ),
+    "upi_ids": re.compile(
+        r"\b(no upi|can't share upi|cannot share upi|don't have upi|no vpa)\b",
+        re.IGNORECASE,
+    ),
+    "ifsc_codes": re.compile(
+        r"\b(no ifsc|can't share ifsc|cannot share ifsc|don't have ifsc)\b",
+        re.IGNORECASE,
+    ),
+    "urls": re.compile(
+        r"\b(no link|can't send link|cannot send link|no website|we cannot provide a link)\b",
+        re.IGNORECASE,
+    ),
+}
+
+
+def detect_denials(text: str) -> set[str]:
+    """Return a set of intel keys the message explicitly refuses to provide.
+
+    Conservative keyword/phrase matching to avoid false positives.
+    """
+    denied: set[str] = set()
+    if not text:
+        return denied
+    for key, pattern in _DENIAL_PATTERNS.items():
+        try:
+            if pattern.search(text):
+                denied.add(key)
+        except Exception:
+            # Be resilient; a failed pattern shouldn't break the pipeline
+            continue
+    return denied
+
+
+def adjust_counts_for_denials(counts: dict[str, int], denied: set[str], sentinel: int = 999) -> dict[str, int]:
+    """Return a copy of counts with denied fields set to a high sentinel so
+    priority logic no longer treats them as URGENT (it checks for == 0).
+    """
+    out = counts.copy() if counts else {}
+    for f in denied:
+        if f in out:
+            out[f] = sentinel
+    return out
+
+
 def normalise_text(text: str) -> str:
     """Strip excess whitespace and decode common URL-encoded characters."""
     import urllib.parse
@@ -161,84 +222,77 @@ def normalise_text(text: str) -> str:
 
 
 def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
-    """
-    Run all regex patterns against *text* and return structured results.
-    Used as fallback when LLM extraction fails.
-    """
     result = ExtractedIntelligence()
 
-    # 1. UPI IDs  (extract first so we can exclude from emails)
-    # Known-suffix matches (high confidence) + general fallback with context checks
-    upi_matches: list[str] = _UPI_KNOWN.findall(text)
-    upi_lower = {m.lower() for m in upi_matches}
-    for m in _UPI_GENERAL.finditer(text):
-        candidate = m.group()
-        cl = candidate.lower()
-        if cl in upi_lower:
-            continue
-        # if nearby context explicitly mentions 'email', treat as an email not UPI
-        start = max(0, m.start() - 30)
-        end = min(len(text), m.end() + 30)
-        window = text[start:end].lower()
-        if "email" in window or "e-mail" in window:
-            continue
-        upi_matches.append(candidate)
-        upi_lower.add(cl)
-    # preserve order while deduping
-    result.upi_ids = list(dict.fromkeys(upi_matches))
-    upi_set = set(m.lower() for m in upi_matches)
-
-    # 2. Email addresses  (exclude UPI matches)
+    # 1. EMAIL ADDRESSES FIRST
+    # We extract these first so we can exclude them from UPI matches
     email_matches = _EMAIL_PATTERN.findall(text)
-    result.email_addresses = list(
-        set(e for e in email_matches if e.lower() not in upi_set)
-    )
+    result.email_addresses = sorted(list(set(email_matches)))
+    email_set_lower = {e.lower() for e in result.email_addresses}
 
-    # 3. Phone numbers (Indian + international formats)
+    # 2. UPI IDs (with Email exclusion)
+    upi_matches: list[str] = []
+    
+    # Check both Known and General patterns
+    for pattern in [_UPI_KNOWN, _UPI_GENERAL]:
+        for m in pattern.finditer(text):
+            candidate = m.group()
+            cl = candidate.lower()
+            
+            # CRITICAL FIX: If this match was already caught as an email, skip it
+            if cl in email_set_lower:
+                continue
+                
+            # Context check: if "email" is mentioned nearby, skip it
+            start = max(0, m.start() - 40)
+            end = min(len(text), m.end() + 40)
+            window = text[start:end].lower()
+            if "email" in window or "e-mail" in window:
+                # Add to emails if not already there, then skip UPI
+                if cl not in email_set_lower:
+                    result.email_addresses.append(candidate)
+                    email_set_lower.add(cl)
+                continue
+                
+            upi_matches.append(candidate)
+
+    # Clean up UPIs
+    result.upi_ids = list(dict.fromkeys(upi_matches))
+    result.email_addresses = sorted(list(set(result.email_addresses)))
+
+    # ... [Rest of your extraction logic for Phones, URLs, IFSC, etc. remains the same] ...
+    
+    # 3. Phone numbers
     phones: set[str] = set()
     for m in _PHONE_INDIA.finditer(text):
         normalised = _normalise_phone(m.group())
         digit_count = len(re.sub(r'\D', '', normalised))
-        if 10 <= digit_count <= 12:  # Indian: 10 digits, or 12 with 91 prefix
-            phones.add(normalised)
+        if 10 <= digit_count <= 12: phones.add(normalised)
     for m in _PHONE_INTL.finditer(text):
         normalised = _normalise_phone(m.group())
         digit_count = len(re.sub(r'\D', '', normalised))
-        if 8 <= digit_count <= 15:
-            phones.add(normalised)
+        if 8 <= digit_count <= 15: phones.add(normalised)
     result.phone_numbers = list(phones)
 
-    # 4. URLs (deobfuscate defanged notation)
+    # 4. URLs
     raw_urls = _URL_PATTERN.findall(text)
     result.urls = list(set(_deobfuscate_url(u) for u in raw_urls))
 
     # 5. IFSC codes
     result.ifsc_codes = list(set(_IFSC_PATTERN.findall(text)))
 
-    # 6. Bank account numbers  (contextual)
+    # 6. Bank accounts
     result.bank_accounts = _extract_bank_accounts(text)
 
-    # 6b. Cross-deconflict phones ↔ bank accounts ↔ UPI
+    # Cross-deconflict
     phone_digit_set = {re.sub(r'\D', '', p) for p in result.phone_numbers}
     upi_locals = {u.split('@')[0] for u in result.upi_ids if '@' in u}
+    result.bank_accounts = [a for a in result.bank_accounts if re.sub(r'\D', '', a) not in phone_digit_set]
+    result.phone_numbers = [p for p in result.phone_numbers if re.sub(r'\D', '', p) not in upi_locals]
 
-    # Remove bank accounts whose digits match a phone number
-    result.bank_accounts = [
-        a for a in result.bank_accounts
-        if re.sub(r'\D', '', a) not in phone_digit_set
-    ]
-
-    # Remove phones that are UPI local parts
-    result.phone_numbers = [
-        p for p in result.phone_numbers
-        if re.sub(r'\D', '', p) not in upi_locals
-    ]
-
-    # 7. Suspicious keywords
+    # 7. Keywords
     text_lower = text.lower()
-    result.suspicious_keywords = [
-        kw for kw in _SCAM_KEYWORDS if kw in text_lower
-    ]
+    result.suspicious_keywords = [kw for kw in _SCAM_KEYWORDS if kw in text_lower]
 
     return result
 

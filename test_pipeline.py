@@ -14,7 +14,7 @@ load_dotenv()
 async def main():
     from src.analyst import analyse_message
     from src.persona import generate_response
-    from src.extractor import extract_intelligence, normalise_text
+    from src.extractor import extract_intelligence_regex as extract_intelligence, normalise_text
 
     test_msg = "URGENT: Your SBI account has been compromised. Share OTP immediately."
     
