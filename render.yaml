@@ -6,7 +6,8 @@ services:
     # Force a stable Python version to avoid the pydantic-core build error
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.7
+        # Use a supported Python version with prebuilt pydantic-core wheels
+        value: "3.11.16"
       - key: API_KEY
         sync: false
       - key: GEMINI_API_KEY
