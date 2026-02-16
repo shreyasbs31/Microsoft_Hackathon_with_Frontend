@@ -213,6 +213,79 @@ def adjust_counts_for_denials(counts: dict[str, int], denied: set[str], sentinel
     return out
 
 
+# ---------------------------------------------------------------------------
+# LLM-based denial detection
+# ---------------------------------------------------------------------------
+
+_DENIAL_DETECTION_SYSTEM_PROMPT = """\
+You are a forensic analyst in a honeypot investigation.
+
+Analyse the scammer's message and determine whether the scammer **explicitly refuses
+or denies** providing any of the following types of information. Only flag a field
+as denied if the scammer clearly states they CANNOT, WILL NOT, or DO NOT provide it.
+
+Do NOT flag a field merely because the scammer didn't mention it — only flag when
+there is an **explicit refusal or denial** in the message.
+
+Return a JSON object with these boolean fields (true = scammer explicitly refused):
+{
+  "phone_numbers_denied": false,
+  "bank_accounts_denied": false,
+  "upi_ids_denied": false,
+  "urls_denied": false,
+  "email_addresses_denied": false,
+  "ifsc_codes_denied": false
+}
+
+Return ONLY the JSON object, no extra text."""
+
+
+async def detect_denials_llm(text: str) -> set[str]:
+    """Use the LLM to detect which intel fields the scammer explicitly refuses to provide.
+
+    Returns a set of intel key names (e.g. {"email_addresses", "upi_ids"}) that the
+    scammer denied.  Falls back to an empty set on any failure so the pipeline is
+    never blocked.
+    """
+    from src.llm_client import call_llm
+
+    if not text or not text.strip():
+        return set()
+
+    try:
+        raw = await call_llm(
+            role="extractor",
+            system_prompt=_DENIAL_DETECTION_SYSTEM_PROMPT,
+            user_prompt=f"Analyse this scammer message for explicit denials:\n\n{text}",
+            json_mode=True,
+        )
+        raw = raw.strip()
+        data = json.loads(raw)
+
+        # Map JSON keys back to intel field names
+        _key_map = {
+            "phone_numbers_denied": "phone_numbers",
+            "bank_accounts_denied": "bank_accounts",
+            "upi_ids_denied": "upi_ids",
+            "urls_denied": "urls",
+            "email_addresses_denied": "email_addresses",
+            "ifsc_codes_denied": "ifsc_codes",
+        }
+
+        denied: set[str] = set()
+        for json_key, intel_key in _key_map.items():
+            if data.get(json_key, False) is True:
+                denied.add(intel_key)
+
+        if denied:
+            logger.info("LLM denial detection flagged: %s", denied)
+        return denied
+
+    except Exception as exc:
+        logger.warning("LLM denial detection failed (non-fatal): %s", exc)
+        return set()
+
+
 def normalise_text(text: str) -> str:
     """Strip excess whitespace and decode common URL-encoded characters."""
     import urllib.parse

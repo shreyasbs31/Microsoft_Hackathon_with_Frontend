@@ -32,6 +32,7 @@ from src.extractor import (
     normalise_text,
     detect_denials,
     adjust_counts_for_denials,
+    detect_denials_llm,
 )
 from src.analyst import analyse_message
 from src.persona import generate_response
@@ -348,6 +349,9 @@ async def _process_turn(request: HoneypotRequest) -> str:
             denied_fields: set[str] = set()
             # Check the translated/current message
             denied_fields |= detect_denials(analysis_text)
+            # LLM-based denial detection (catches natural phrasing the regex misses)
+            llm_denied = await detect_denials_llm(analysis_text)
+            denied_fields |= llm_denied
             # Also scan the last few scammer messages from the conversation history
             try:
                 conv = request.conversationHistory or []
