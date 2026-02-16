@@ -101,10 +101,10 @@ async def validate_api_key(request: Request, call_next):
 
     api_key = request.headers.get("x-api-key", "")
     if api_key != API_KEY:
-        # Return 200 with error reply instead of 401 — never break the evaluator
+        # Return 401 on invalid API key so callers can detect auth failures.
         return JSONResponse(
-            status_code=200,
-            content={"status": "success", "reply": "Hmm, I don't understand. Can you try again?"},
+            status_code=401,
+            content={"status": "error", "detail": "Invalid API key"},
         )
 
     return await call_next(request)
@@ -274,6 +274,34 @@ async def _process_turn(request: HoneypotRequest) -> str:
         session.set_ifsc_codes(merged_intel["ifsc_codes"])
         session.set_suspicious_keywords(merged_intel["suspicious_keywords"])
 
+        # ---- I0. Fire callback when we've just processed the 19th scammer message
+        try:
+            conversation_history = request.conversationHistory or []
+            scammer_count = sum(
+                1 for m in conversation_history if (m.get("sender") or "").lower() == "scammer"
+            )
+            if (request.message and (request.message.sender or "").lower() == "scammer"):
+                scammer_count += 1
+        except Exception:
+            scammer_count = 0
+
+        # Trigger only when this is exactly the 19th scammer message (after extraction)
+        if (
+            scammer_count == 19
+            and (request.message.sender or "").lower() == "scammer"
+            and not session.final_callback_sent
+        ):
+            logger.info("19th scammer message reached — firing interim final callbacks")
+            try:
+                success = await fire_callbacks(session)
+                db.commit()
+                if success:
+                    logger.info("Callbacks sent successfully for session %s (19th message)", session.session_id)
+                else:
+                    logger.warning("One or more callbacks failed for session %s (19th message)", session.session_id)
+            except Exception as exc:
+                logger.error("Callback error for session %s at 19th message: %s", session.session_id, exc)
+
         # ---- E. Conditional translation ----
         analysis_text = normalised_text
         language = session.language or "English"
@@ -351,6 +379,13 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 logger.error("Callback error for session %s: %s", session.session_id, exc)
 
         # ---- J. Return reply ----
+        # Remove asterisks used for emphasis from outgoing reply text
+        try:
+            if isinstance(reply, str):
+                reply = reply.replace("*", "")
+        except Exception:
+            pass
+
         return reply
 
     finally:

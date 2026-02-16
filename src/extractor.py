@@ -133,8 +133,10 @@ _IFSC_PATTERN = re.compile(
     r'\b[A-Z]{4}0[A-Z0-9]{6}\b'
 )
 
-# Bank account number: 9-18 digits, allow spaces/dashes in between
-_BANK_ACCOUNT_DIGITS = re.compile(r'\b(?:\d[\s-]?){9,18}\d\b')
+# Bank account number: 9-18 digits, allow spaces/dashes in between.
+# Use lookarounds so that surrounding punctuation doesn't stop matches
+# and ensure we don't accidentally match longer digit runs.
+_BANK_ACCOUNT_DIGITS = re.compile(r'(?<!\d)(?:\d[\s-]?){8,17}\d(?!\d)')
 _BANK_CONTEXT_KEYWORDS = re.compile(
     r'account|a/c|acc\b|bank|number|no\.|credit|debit|savings|current',
     re.IGNORECASE,
@@ -166,12 +168,24 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
     result = ExtractedIntelligence()
 
     # 1. UPI IDs  (extract first so we can exclude from emails)
-    # Known-suffix matches (high confidence) + general fallback
+    # Known-suffix matches (high confidence) + general fallback with context checks
     upi_matches: list[str] = _UPI_KNOWN.findall(text)
-    for candidate in _UPI_GENERAL.findall(text):
-        if candidate.lower() not in {m.lower() for m in upi_matches}:
-            upi_matches.append(candidate)
-    result.upi_ids = list(set(upi_matches))
+    upi_lower = {m.lower() for m in upi_matches}
+    for m in _UPI_GENERAL.finditer(text):
+        candidate = m.group()
+        cl = candidate.lower()
+        if cl in upi_lower:
+            continue
+        # if nearby context explicitly mentions 'email', treat as an email not UPI
+        start = max(0, m.start() - 30)
+        end = min(len(text), m.end() + 30)
+        window = text[start:end].lower()
+        if "email" in window or "e-mail" in window:
+            continue
+        upi_matches.append(candidate)
+        upi_lower.add(cl)
+    # preserve order while deduping
+    result.upi_ids = list(dict.fromkeys(upi_matches))
     upi_set = set(m.lower() for m in upi_matches)
 
     # 2. Email addresses  (exclude UPI matches)
@@ -256,47 +270,40 @@ def _normalise_phone(raw: str) -> str:
 
 def _is_boilerplate_number(digits: str) -> bool:
     """
-    Returns True if the digit string is a boilerplate/placeholder pattern:
-    - Sequential ascending (123456...)
-    - Sequential descending (987654...)
-    - All same digit (111111...)
-    - Short repeating pattern (e.g. 12341234, period <= 4)
+    Modified to be less aggressive. 
+    Only flags sequences of the exact same digit.
     """
     if len(set(digits)) == 1:
-        return True  # all same digit
-    # Ascending/descending sequence
-    asc = ''.join(str((int(digits[0]) + i) % 10) for i in range(len(digits)))
-    desc = ''.join(str((int(digits[0]) - i) % 10) for i in range(len(digits)))
-    if digits == asc or digits == desc:
-        return True
-    # Short repeating pattern (period <= 4)
-    for period in range(1, 5):
-        if len(digits) % period == 0:
-            pat = digits[:period]
-            if pat * (len(digits) // period) == digits:
-                return True
+        return True  # e.g., "999999999"
+    
+    # We remove the ascending/descending check because 
+    # scammers often use '123456789' as a placeholder 
+    # that we actually want to capture in our logs.
     return False
 
 def _extract_bank_accounts(text: str) -> list[str]:
-    """
-    Extract digit sequences that look like bank account numbers,
-    but only if banking-related keywords appear within a 80-char window.
-    Rejects boilerplate/placeholder numbers (e.g. 1234567890123456).
-    """
     results: set[str] = set()
     for match in _BANK_ACCOUNT_DIGITS.finditer(text):
         raw = match.group()
         digits = re.sub(r'\D', '', raw)
+        
+        # Ensure length is valid
         if not (9 <= len(digits) <= 18):
             continue
+            
+        # Check against the relaxed boilerplate rule
         if _is_boilerplate_number(digits):
             continue
-        start = max(0, match.start() - 120)
-        end = min(len(text), match.end() + 120)
+            
+        # Increased window slightly to catch context in messy chats
+        start = max(0, match.start() - 150)
+        end = min(len(text), match.end() + 150)
         window = text[start:end]
+        
         if _BANK_CONTEXT_KEYWORDS.search(window):
             results.add(digits)
-    return list(results)
+            
+    return sorted(results)
 
 
 def merge_intelligence(

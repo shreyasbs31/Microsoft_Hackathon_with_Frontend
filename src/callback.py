@@ -58,7 +58,7 @@ def build_callback_payload(session: HoneypotSession) -> dict:
             agent_notes = (agent_notes + " " + ifsc_note).strip()
 
     # Remove newlines from agent notes
-    agent_notes = agent_notes.replace("\n", " ").strip()
+    agent_notes = agent_notes.replace("\n", " ").replace("*", " ").strip()
 
     payload = {
         "sessionId": session.session_id,
