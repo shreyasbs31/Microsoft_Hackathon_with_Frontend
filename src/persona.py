@@ -79,35 +79,136 @@ Generate ONLY the reply text. No JSON, no labels, no prefixes."""
 
 
 # ---------------------------------------------------------------------------
-# Priority instruction builder
+# All cyclable intel fields (canonical order)
 # ---------------------------------------------------------------------------
 
-def _build_priority_instructions(counts: dict[str, int]) -> str:
+_ALL_INTEL_FIELDS = [
+    "phone_numbers", "bank_accounts", "upi_ids",
+    "urls", "email_addresses", "ifsc_codes",
+]
+
+# How many consecutive asks without new data before auto-exhausting a field
+_MAX_ASKS_BEFORE_EXHAUST = 3
+
+
+# ---------------------------------------------------------------------------
+# Priority instruction builder (with cycling state)
+# ---------------------------------------------------------------------------
+
+def _build_priority_instructions(
+    counts: dict[str, int],
+    agent_state: dict,
+) -> tuple[str, dict]:
     """
-    Build dynamic extraction priority instructions based on current counts.
-    Fields with 0 extractions are URGENT.
-    If all have ≥1, push for more in the lowest-count field.
+    Build dynamic extraction priority instructions based on current counts
+    and cycling state.
+
+    Returns:
+        (priority_instructions_text, updated_agent_state)
+
+    Phases:
+        1. Initial extraction — fields with count == 0 are urgent
+        2. Cycling — rotate through non-exhausted fields asking for alternates
+        3. General engagement — all fields exhausted, just keep scammer talking
     """
+    state = agent_state.copy()
+
+    # Initialise cycling keys if missing
+    state.setdefault("initial_cycle_complete", False)
+    state.setdefault("cycling_field_index", 0)
+    state.setdefault("exhausted_fields", [])
+    state.setdefault("field_ask_counts", {f: 0 for f in _ALL_INTEL_FIELDS})
+    state.setdefault("prev_intel_counts", {})
+
+    exhausted: list[str] = state["exhausted_fields"]
+    ask_counts: dict[str, int] = state["field_ask_counts"]
+    prev_counts: dict[str, int] = state["prev_intel_counts"]
+
+    # ---- Phase 1: Initial extraction (any field has 0) ----
     zero_fields = [k for k, v in counts.items() if v == 0]
 
-    if zero_fields:
+    if zero_fields and not state["initial_cycle_complete"]:
         readable = ", ".join(f.replace("_", " ") for f in zero_fields)
+        state["prev_intel_counts"] = dict(counts)
         return (
             f"URGENT: You have NOT yet extracted: {readable}. "
             f"These are your top priority. Naturally steer the conversation "
             f"to elicit this information from the scammer. "
             f"For example, ask for a callback number, a link to verify, "
-            f"an email for documentation, their bank IFSC, or account details."
+            f"an email for documentation, their bank IFSC, or account details.",
+            state,
+        )
+
+    # Mark initial cycle as complete once we reach here
+    if not state["initial_cycle_complete"]:
+        state["initial_cycle_complete"] = True
+        logger.info("Initial extraction cycle complete — entering cycling mode")
+
+    # ---- Auto-exhaust fields where we asked too many times without new data ----
+    for field in _ALL_INTEL_FIELDS:
+        if field in exhausted:
+            continue
+        current = counts.get(field, 0)
+        previous = prev_counts.get(field, 0)
+        if current > previous:
+            # New data found — reset ask count for this field
+            ask_counts[field] = 0
+        if ask_counts.get(field, 0) >= _MAX_ASKS_BEFORE_EXHAUST:
+            if field not in exhausted:
+                exhausted.append(field)
+                logger.info("Field '%s' auto-exhausted after %d asks", field, _MAX_ASKS_BEFORE_EXHAUST)
+
+    # ---- Phase 3: All fields exhausted ----
+    cyclable = [f for f in _ALL_INTEL_FIELDS if f not in exhausted]
+    if not cyclable:
+        state["exhausted_fields"] = exhausted
+        state["field_ask_counts"] = ask_counts
+        state["prev_intel_counts"] = dict(counts)
+        return (
+            "All intelligence fields have been fully extracted or exhausted. "
+            "Excellent work. Now focus on keeping the scammer engaged and talking. "
+            "Try to extract contextual details: full names, organisation names, "
+            "locations, reference IDs, or any other identifying information. "
+            "Keep the conversation natural and avoid repeating previous questions.",
+            state,
+        )
+
+    # ---- Phase 2: Cycling through non-exhausted fields ----
+    idx = state["cycling_field_index"] % len(cyclable)
+    target_field = cyclable[idx]
+
+    # Increment ask count for this target
+    ask_counts[target_field] = ask_counts.get(target_field, 0) + 1
+    current_ask = ask_counts[target_field]
+
+    # Advance index for next turn
+    state["cycling_field_index"] = (idx + 1) % len(cyclable)
+
+    readable = target_field.replace("_", " ")
+    current_count = counts.get(target_field, 0)
+
+    if current_ask >= _MAX_ASKS_BEFORE_EXHAUST - 1:
+        # Last chance — ask a confirmation question
+        instructions = (
+            f"You have asked for additional {readable} multiple times without "
+            f"getting new data (currently have {current_count}). "
+            f"This is your LAST attempt. Ask naturally whether the scammer has "
+            f"any OTHER {readable} — e.g. 'Is there another number I can reach "
+            f"you on?' or 'Do you have an alternate account?'. If they confirm "
+            f"that is the only one, accept it and move on."
         )
     else:
-        # All fields have at least 1 — push for the lowest
-        min_field = min(counts, key=counts.get)
-        readable = min_field.replace("_", " ")
-        return (
-            f"All intelligence fields have at least 1 extraction. Good work. "
-            f"Now push for ADDITIONAL {readable} (currently lowest at "
-            f"{counts[min_field]}). Try a different angle to extract more."
+        instructions = (
+            f"All fields have at least 1 extraction. Now try to get an ADDITIONAL "
+            f"{readable} (currently have {current_count}). Use a different angle "
+            f"than before — for example, mention you have multiple accounts or "
+            f"numbers and ask if they do too. Be natural and conversational."
         )
+
+    state["exhausted_fields"] = exhausted
+    state["field_ask_counts"] = ask_counts
+    state["prev_intel_counts"] = dict(counts)
+    return instructions, state
 
 
 # ---------------------------------------------------------------------------
@@ -123,17 +224,19 @@ async def generate_response(
     intel_counts: dict[str, int],
     last_approach: str,
     language: str = "English",
-) -> tuple[str, str]:
+    agent_state: dict | None = None,
+) -> tuple[str, str, dict]:
     """
     Generate a persona response to the scammer.
 
     Returns:
-        (reply_text, approach_summary)
+        (reply_text, approach_summary, updated_agent_state)
         where approach_summary is a 1-line description of the tactic used
         (stored for anti-repetition in next turn).
     """
 
-    priority_instructions = _build_priority_instructions(intel_counts)
+    _agent_state = agent_state if agent_state is not None else {}
+    priority_instructions, updated_state = _build_priority_instructions(intel_counts, _agent_state)
 
     system_prompt = PERSONA_SYSTEM_PROMPT.format(
         scam_type=scam_type or "Unknown — treat as suspicious",
@@ -181,7 +284,7 @@ async def generate_response(
         # Generate a brief approach summary for anti-repetition
         approach = await _summarise_approach(reply)
 
-        return reply, approach
+        return reply, approach, updated_state
 
     except Exception as exc:
         logger.error("Persona LLM failed: %s", exc)

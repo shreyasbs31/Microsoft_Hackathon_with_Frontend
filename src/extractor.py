@@ -214,6 +214,55 @@ def adjust_counts_for_denials(counts: dict[str, int], denied: set[str], sentinel
 
 
 # ---------------------------------------------------------------------------
+# Single-value confirmation detection
+# ---------------------------------------------------------------------------
+
+_SINGLE_VALUE_PATTERNS: dict[str, re.Pattern] = {
+    "phone_numbers": re.compile(
+        r"\b(only (?:one|1|this|that) (?:phone|number|mobile)|that(?:'s| is) (?:the |my )?only (?:number|phone|mobile)|i (?:only )?have (?:one|1|this) (?:number|phone)|same number|no other (?:number|phone))\b",
+        re.IGNORECASE,
+    ),
+    "bank_accounts": re.compile(
+        r"\b(only (?:one|1|this|that) (?:account|bank)|that(?:'s| is) (?:the |my )?only account|i (?:only )?have (?:one|1|this) account|same account|no other account)\b",
+        re.IGNORECASE,
+    ),
+    "upi_ids": re.compile(
+        r"\b(only (?:one|1|this|that) (?:upi|vpa)|that(?:'s| is) (?:the |my )?only upi|i (?:only )?have (?:one|1|this) upi|same upi|no other upi)\b",
+        re.IGNORECASE,
+    ),
+    "email_addresses": re.compile(
+        r"\b(only (?:one|1|this|that) (?:email|e-?mail)|that(?:'s| is) (?:the |my )?only (?:email|e-?mail)|i (?:only )?have (?:one|1|this) (?:email|e-?mail)|same email|no other email)\b",
+        re.IGNORECASE,
+    ),
+    "urls": re.compile(
+        r"\b(only (?:one|1|this|that) (?:link|url|website)|that(?:'s| is) (?:the |my )?only (?:link|url|website)|same link|no other (?:link|url|website))\b",
+        re.IGNORECASE,
+    ),
+    "ifsc_codes": re.compile(
+        r"\b(only (?:one|1|this|that) (?:ifsc|branch)|that(?:'s| is) (?:the |my )?only (?:ifsc|branch)|same ifsc|no other ifsc)\b",
+        re.IGNORECASE,
+    ),
+}
+
+
+def detect_single_value_confirmations(text: str) -> set[str]:
+    """Return a set of intel keys the scammer confirms having only one value for.
+
+    Detects phrases like 'that is my only number', 'I only have one account', etc.
+    """
+    confirmed: set[str] = set()
+    if not text:
+        return confirmed
+    for key, pattern in _SINGLE_VALUE_PATTERNS.items():
+        try:
+            if pattern.search(text):
+                confirmed.add(key)
+        except Exception:
+            continue
+    return confirmed
+
+
+# ---------------------------------------------------------------------------
 # LLM-based denial detection
 # ---------------------------------------------------------------------------
 

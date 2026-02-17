@@ -33,6 +33,7 @@ from src.extractor import (
     detect_denials,
     adjust_counts_for_denials,
     detect_denials_llm,
+    detect_single_value_confirmations,
 )
 from src.analyst import analyse_message
 from src.persona import generate_response
@@ -347,11 +348,21 @@ async def _process_turn(request: HoneypotRequest) -> str:
         try:
             # Detect explicit denials in recent scammer messages and current text
             denied_fields: set[str] = set()
-            # Check the translated/current message
+            single_value_fields: set[str] = set()
+
+            # Check the translated/current message with regex
             denied_fields |= detect_denials(analysis_text)
-            # LLM-based denial detection (catches natural phrasing the regex misses)
-            llm_denied = await detect_denials_llm(analysis_text)
-            denied_fields |= llm_denied
+            # Check for single-value confirmations ("that's the only number I have")
+            single_value_fields |= detect_single_value_confirmations(analysis_text)
+
+            # LLM-based denial detection — only if regex found nothing
+            # (optimization: skip the LLM call when regex already caught denials)
+            if not denied_fields and not single_value_fields:
+                llm_denied = await detect_denials_llm(analysis_text)
+                denied_fields |= llm_denied
+            else:
+                logger.info("Regex denial/single-value detection found results — skipping LLM denial call")
+
             # Also scan the last few scammer messages from the conversation history
             try:
                 conv = request.conversationHistory or []
@@ -359,6 +370,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 scammer_msgs = [m for m in conv if (m.get("sender") or "").lower() == "scammer"]
                 for m in scammer_msgs[-3:]:
                     denied_fields |= detect_denials(m.get("text", ""))
+                    single_value_fields |= detect_single_value_confirmations(m.get("text", ""))
             except Exception:
                 pass
 
@@ -368,9 +380,22 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 denial_readable = ", ".join(sorted(denied_fields))
                 session.agent_notes = _append_agent_note(existing_notes, f"Scammer denied sharing: {denial_readable}")
 
-            adjusted_counts = adjust_counts_for_denials(session.intel_counts(), denied_fields)
+            if single_value_fields:
+                existing_notes = session.agent_notes or ""
+                sv_readable = ", ".join(sorted(single_value_fields))
+                session.agent_notes = _append_agent_note(existing_notes, f"Scammer confirmed single value for: {sv_readable}")
 
-            reply, approach_summary = await generate_response(
+            # Feed denials and single-value confirmations into cycling exhaustion
+            agent_state = session.get_agent_state()
+            exhausted = set(agent_state.get("exhausted_fields", []))
+            exhausted |= denied_fields
+            exhausted |= single_value_fields
+            agent_state["exhausted_fields"] = sorted(exhausted)
+            session.set_agent_state(agent_state)
+
+            adjusted_counts = adjust_counts_for_denials(session.intel_counts(), denied_fields | single_value_fields)
+
+            reply, approach_summary, updated_agent_state = await generate_response(
                 current_message=analysis_text,
                 conversation_history=request.conversationHistory,
                 session_status=session.status.value,
@@ -379,6 +404,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 intel_counts=adjusted_counts,
                 last_approach=last_approach,
                 language=language,
+                agent_state=agent_state,
             )
         except Exception as exc:
             logger.error("Persona generation failed: %s", exc)
@@ -387,8 +413,8 @@ async def _process_turn(request: HoneypotRequest) -> str:
 
         # ---- H. Update session ----
         session.turn_count += 1
-        agent_state["last_approach"] = approach_summary
-        session.set_agent_state(agent_state)
+        updated_agent_state["last_approach"] = approach_summary
+        session.set_agent_state(updated_agent_state)
         session.is_active = session.turn_count < MAX_TURNS
 
         db.commit()
