@@ -35,7 +35,7 @@ GUVI_CALLBACK_URL_2 = os.getenv(
 )
 
 # --- Database ---
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./honeypot.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://honeypot_user:password@localhost:5432/honeypot_db")
 
 # --- Timeouts ---
 LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "15"))

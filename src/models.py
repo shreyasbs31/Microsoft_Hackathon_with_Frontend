@@ -32,7 +32,18 @@ class SessionStatus(str, enum.Enum):
 # SQLAlchemy setup
 # ---------------------------------------------------------------------------
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+_connect_args: dict = {}
+_engine_kwargs: dict = {}
+
+if DATABASE_URL.startswith("sqlite"):
+    _connect_args["check_same_thread"] = False
+else:
+    # PostgreSQL connection pooling for concurrent sessions
+    _engine_kwargs["pool_size"] = 10
+    _engine_kwargs["max_overflow"] = 20
+    _engine_kwargs["pool_pre_ping"] = True
+
+engine = create_engine(DATABASE_URL, connect_args=_connect_args, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

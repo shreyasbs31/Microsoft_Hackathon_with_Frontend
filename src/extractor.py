@@ -190,7 +190,7 @@ _SCAM_KEYWORDS = [
 
 # Quick pre-check patterns to decide if LLM extraction is worth calling
 _REFERENCE_HINT_PATTERN = re.compile(
-    r'(?:case|ref|crn|fir|complaint|ticket|sr|cr|pol|policy|lic|ins|insurance|ord|order|awb|tracking|shipment|parcel)[\s#\-/:]?\d',
+    r'(?:case|ref|crn|fir|complaint|ticket|sr|cr|pol|policy|lic|ins|insurance|ord|order|awb|tracking|shipment|parcel)[\w\s#\-/:.]{0,15}\d',
     re.IGNORECASE,
 )
 

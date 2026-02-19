@@ -62,9 +62,12 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     # Remove newlines from agent notes
     agent_notes = agent_notes.replace("\n", " ").replace("*", " ").strip()
 
-    # Scam type and confidence level
-    scam_type_list = [session.scam_type] if session.scam_type else []
-    confidence_list = [session.confidence_level] if session.confidence_level else []
+    # Scam type and confidence level (scalar, not lists)
+    scam_type_val = session.scam_type or ""
+    try:
+        confidence_val = float(session.confidence_level) if session.confidence_level else 0.0
+    except (ValueError, TypeError):
+        confidence_val = 0.0
 
     payload = {
         "sessionId": session.session_id,
@@ -83,8 +86,8 @@ def build_callback_payload(session: HoneypotSession) -> dict:
             "orderNumbers": order_numbers,
         },
         "agentNotes": agent_notes or "Honeypot engagement completed.",
-        "scamType": scam_type_list,
-        "confidenceLevel": confidence_list,
+        "scamType": scam_type_val,
+        "confidenceLevel": confidence_val,
     }
     return payload
 
