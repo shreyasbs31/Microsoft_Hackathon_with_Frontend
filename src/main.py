@@ -34,6 +34,8 @@ from src.extractor import (
     adjust_counts_for_denials,
     detect_denials_llm,
     detect_single_value_confirmations,
+    has_reference_hints,
+    extract_reference_ids,
 )
 from src.analyst import analyse_message
 from src.persona import generate_response
@@ -178,14 +180,17 @@ async def api_message(request: HoneypotRequest):
 async def _process_turn(request: HoneypotRequest) -> str:
     """Core processing pipeline for a single turn."""
 
-    def _append_agent_note(existing: str, note: str) -> str:
+    def _append_agent_note(existing: str, note: str, max_len: int = 500) -> str:
         note = (note or "").strip()
         if not note:
             return existing
         if note in existing:
             return existing
         sep = " " if existing else ""
-        return (existing + sep + note).strip()
+        combined = (existing + sep + note).strip()
+        if len(combined) > max_len:
+            combined = combined[:max_len].rsplit(" ", 1)[0] + "..."
+        return combined
 
     db = SessionLocal()
     try:
@@ -261,6 +266,19 @@ async def _process_turn(request: HoneypotRequest) -> str:
             ifsc_note = "IFSC codes found: " + ", ".join(new_intel.ifsc_codes)
             existing_notes = session.agent_notes or ""
             session.agent_notes = _append_agent_note(existing_notes, ifsc_note)
+
+        # ---- C4. LLM extraction for case_ids, policy_numbers, order_numbers ----
+        if has_reference_hints(normalised_text):
+            ref_ids = await extract_reference_ids(normalised_text)
+            for cid in ref_ids.get("case_ids", []):
+                if cid and cid not in new_intel.case_ids:
+                    new_intel.case_ids.append(cid)
+            for pn in ref_ids.get("policy_numbers", []):
+                if pn and pn not in new_intel.policy_numbers:
+                    new_intel.policy_numbers.append(pn)
+            for on in ref_ids.get("order_numbers", []):
+                if on and on not in new_intel.order_numbers:
+                    new_intel.order_numbers.append(on)
 
         # ---- D. Merge intel with session data ----
         existing_intel = {

@@ -77,6 +77,7 @@ def build_callback_payload(session: HoneypotSession) -> dict:
             "upiIds": upi_ids,
             "phishingLinks": phishing_links,
             "emailAddresses": email_addresses,
+            "ifscCodes": ifsc_codes,
             "caseIds": case_ids,
             "policyNumbers": policy_numbers,
             "orderNumbers": order_numbers,

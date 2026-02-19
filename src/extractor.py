@@ -62,6 +62,53 @@ async def extract_misc_notes(text: str) -> str:
         return ""
 
 
+# ---------------------------------------------------------------------------
+# LLM-based reference ID extraction  (case IDs, policy numbers, order numbers)
+# ---------------------------------------------------------------------------
+
+_REFERENCE_IDS_SYSTEM_PROMPT = """\
+Extract reference identifiers from scammer message. Return ONLY the numeric/alphanumeric ID values, NOT the label prefix.
+Example: if message says "CASE-12345" → extract "12345". If "REF987654" → extract "987654". If "policy LIC-99887766" → extract "99887766".
+
+Return ONLY valid JSON:
+{"case_ids":[],"policy_numbers":[],"order_numbers":[]}
+Rules: case_ids = case/reference/complaint/FIR/ticket/CRN IDs. policy_numbers = insurance/policy/LIC numbers. order_numbers = order/AWB/tracking/shipment IDs.
+Empty lists if none found."""
+
+
+def has_reference_hints(text: str) -> bool:
+    """Cheap regex pre-check: returns True if text likely contains reference IDs."""
+    return bool(_REFERENCE_HINT_PATTERN.search(text))
+
+
+async def extract_reference_ids(text: str) -> dict[str, list[str]]:
+    """
+    LLM-based extraction for case_ids, policy_numbers, order_numbers.
+    Returns dict with those three keys (lists of strings).
+    Only call when has_reference_hints(text) is True.
+    """
+    from src.llm_client import call_llm
+    import json as _json
+
+    empty = {"case_ids": [], "policy_numbers": [], "order_numbers": []}
+    try:
+        raw = await call_llm(
+            role="extractor",
+            system_prompt=_REFERENCE_IDS_SYSTEM_PROMPT,
+            user_prompt=text,
+            json_mode=True,
+        )
+        parsed = _json.loads(raw.strip())
+        return {
+            "case_ids": [str(v) for v in parsed.get("case_ids", [])],
+            "policy_numbers": [str(v) for v in parsed.get("policy_numbers", [])],
+            "order_numbers": [str(v) for v in parsed.get("order_numbers", [])],
+        }
+    except Exception as exc:
+        logger.warning("LLM reference-ID extraction failed: %s", exc)
+        return empty
+
+
 # =========================================================================
 # REGEX FALLBACK  (original implementation)
 # =========================================================================
@@ -141,21 +188,9 @@ _SCAM_KEYWORDS = [
     "offer", "deal", "discount", "free", "gift", "reward",
 ]
 
-# Case / reference IDs  (e.g. CASE-12345, REF12345, CRN-123456, FIR-123456)
-_CASE_ID_PATTERN = re.compile(
-    r'\b(?:CASE|REF|CRN|FIR|COMPLAINT|TICKET|SR|CR)[\s#\-/]?\d{3,12}\b',
-    re.IGNORECASE,
-)
-
-# Policy numbers (e.g. POL-123456, POLICY/12345, LIC-12345678)
-_POLICY_NUMBER_PATTERN = re.compile(
-    r'\b(?:POL(?:ICY)?|LIC|INS(?:URANCE)?)[\s#\-/]?\d{4,15}\b',
-    re.IGNORECASE,
-)
-
-# Order numbers (e.g. ORD-12345, ORDER#12345, AWB12345678)
-_ORDER_NUMBER_PATTERN = re.compile(
-    r'\b(?:ORD(?:ER)?|AWB|TRACKING|SHIPMENT|PARCEL)[\s#\-/]?\d{4,15}\b',
+# Quick pre-check patterns to decide if LLM extraction is worth calling
+_REFERENCE_HINT_PATTERN = re.compile(
+    r'(?:case|ref|crn|fir|complaint|ticket|sr|cr|pol|policy|lic|ins|insurance|ord|order|awb|tracking|shipment|parcel)[\s#\-/:]?\d',
     re.IGNORECASE,
 )
 
@@ -452,14 +487,8 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
     text_lower = text.lower()
     result.suspicious_keywords = [kw for kw in _SCAM_KEYWORDS if kw in text_lower]
 
-    # 8. Case IDs
-    result.case_ids = list(set(m.group() for m in _CASE_ID_PATTERN.finditer(text)))
-
-    # 9. Policy numbers
-    result.policy_numbers = list(set(m.group() for m in _POLICY_NUMBER_PATTERN.finditer(text)))
-
-    # 10. Order numbers
-    result.order_numbers = list(set(m.group() for m in _ORDER_NUMBER_PATTERN.finditer(text)))
+    # 8-10: case_ids, policy_numbers, order_numbers handled by LLM extraction
+    # (called separately in main.py only when reference hints are detected)
 
     return result
 
