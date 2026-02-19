@@ -271,6 +271,9 @@ async def _process_turn(request: HoneypotRequest) -> str:
             "email_addresses": session.get_email_addresses(),
             "ifsc_codes": session.get_ifsc_codes(),
             "suspicious_keywords": session.get_suspicious_keywords(),
+            "case_ids": session.get_case_ids(),
+            "policy_numbers": session.get_policy_numbers(),
+            "order_numbers": session.get_order_numbers(),
         }
         merged_intel = merge_intelligence(existing_intel, new_intel)
 
@@ -282,6 +285,9 @@ async def _process_turn(request: HoneypotRequest) -> str:
         session.set_email_addresses(merged_intel["email_addresses"])
         session.set_ifsc_codes(merged_intel["ifsc_codes"])
         session.set_suspicious_keywords(merged_intel["suspicious_keywords"])
+        session.set_case_ids(merged_intel["case_ids"])
+        session.set_policy_numbers(merged_intel["policy_numbers"])
+        session.set_order_numbers(merged_intel["order_numbers"])
 
         # ---- I0. Fire callback when we've just processed the 19th scammer message
         try:
@@ -333,6 +339,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
             if analysis.status == "HONEYPOT":
                 session.status = SessionStatus.HONEYPOT
                 session.scam_type = analysis.scam_type
+                session.confidence_level = str(analysis.confidence)
             elif analysis.status == "LEGIT":
                 session.status = SessionStatus.LEGIT
 
@@ -355,13 +362,11 @@ async def _process_turn(request: HoneypotRequest) -> str:
             # Check for single-value confirmations ("that's the only number I have")
             single_value_fields |= detect_single_value_confirmations(analysis_text)
 
-            # LLM-based denial detection — only if regex found nothing
-            # (optimization: skip the LLM call when regex already caught denials)
-            if not denied_fields and not single_value_fields:
-                llm_denied = await detect_denials_llm(analysis_text)
-                denied_fields |= llm_denied
-            else:
-                logger.info("Regex denial/single-value detection found results — skipping LLM denial call")
+            # LLM-based denial detection — complements regex by catching
+            # natural phrasing the regex misses (may find denials for
+            # different fields than what regex caught)
+            llm_denied = await detect_denials_llm(analysis_text)
+            denied_fields |= llm_denied
 
             # Also scan the last few scammer messages from the conversation history
             try:

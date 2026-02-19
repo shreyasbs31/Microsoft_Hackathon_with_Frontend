@@ -24,6 +24,9 @@ class ExtractedIntelligence:
     email_addresses: list[str] = field(default_factory=list)
     ifsc_codes: list[str] = field(default_factory=list)
     suspicious_keywords: list[str] = field(default_factory=list)
+    case_ids: list[str] = field(default_factory=list)
+    policy_numbers: list[str] = field(default_factory=list)
+    order_numbers: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -31,22 +34,9 @@ class ExtractedIntelligence:
 # ---------------------------------------------------------------------------
 
 _MISC_NOTES_SYSTEM_PROMPT = """\
-You are a forensic analyst reviewing a scammer's message in a honeypot investigation.
-
-Your ONLY job is to extract **contextual intelligence** that is NOT a phone number,
-bank account, UPI ID, URL, email, IFSC code, or keyword. Those are handled separately.
-
-Focus on:
-- Names of people or organisations mentioned or impersonated
-- Physical addresses or locations
-- App names, platform names
-- Reference / transaction / case IDs
-- Threats made or pressure tactics described
-- Impersonated entities (banks, government bodies, companies)
-- Any other notable contextual detail
-
-Respond with a SHORT, factual, single-paragraph summary (1-3 sentences).
-If there is nothing noteworthy beyond the structured fields, respond with exactly: NONE"""
+Extract contextual intel from scammer message. Ignore phones/accounts/UPI/URLs/emails/IFSC/keywords (handled separately).
+Focus: names, orgs, addresses, apps, reference IDs, threats, impersonated entities.
+Max 2 sentences. If nothing noteworthy: NONE"""
 
 
 async def extract_misc_notes(text: str) -> str:
@@ -151,6 +141,24 @@ _SCAM_KEYWORDS = [
     "offer", "deal", "discount", "free", "gift", "reward",
 ]
 
+# Case / reference IDs  (e.g. CASE-12345, REF12345, CRN-123456, FIR-123456)
+_CASE_ID_PATTERN = re.compile(
+    r'\b(?:CASE|REF|CRN|FIR|COMPLAINT|TICKET|SR|CR)[\s#\-/]?\d{3,12}\b',
+    re.IGNORECASE,
+)
+
+# Policy numbers (e.g. POL-123456, POLICY/12345, LIC-12345678)
+_POLICY_NUMBER_PATTERN = re.compile(
+    r'\b(?:POL(?:ICY)?|LIC|INS(?:URANCE)?)[\s#\-/]?\d{4,15}\b',
+    re.IGNORECASE,
+)
+
+# Order numbers (e.g. ORD-12345, ORDER#12345, AWB12345678)
+_ORDER_NUMBER_PATTERN = re.compile(
+    r'\b(?:ORD(?:ER)?|AWB|TRACKING|SHIPMENT|PARCEL)[\s#\-/]?\d{4,15}\b',
+    re.IGNORECASE,
+)
+
 
 # ---------------------------------------------------------------------------
 # Denial detection (explicit refusal phrases -> map to intel keys)
@@ -158,27 +166,70 @@ _SCAM_KEYWORDS = [
 
 _DENIAL_PATTERNS: dict[str, re.Pattern] = {
     "email_addresses": re.compile(
-        r"\b(no e-?mail|cannot e-?mail|we cannot email|email isn't allowed|email is not allowed|no email address|don't have an email|cannot provide an email)\b",
+        r"\b("
+        r"no e-?mail|cannot e-?mail|we cannot email|email isn't allowed|"
+        r"email is not allowed|no email address|don't have an email|"
+        r"cannot provide an email|can't provide (?:an )?email|"
+        r"won't (?:be able to )?(?:send|provide|share) (?:an )?email|"
+        r"unable to (?:send|provide) (?:an )?email|"
+        r"we do not (?:send|provide|use) email|"
+        r"not possible (?:to|via) email|"
+        r"for security reasons we cannot email"
+        r")\b",
         re.IGNORECASE,
     ),
     "phone_numbers": re.compile(
-        r"\b(no phone|can't call|cannot call|won't share number|can't share number|no phone number|don't have a phone)\b",
+        r"\b("
+        r"no phone|can't call|cannot call|won't share number|"
+        r"can't share number|no phone number|don't have a phone|"
+        r"cannot provide (?:a )?(?:phone|number|direct (?:number|line))|"
+        r"can't provide (?:a )?(?:phone|number|direct (?:number|line))|"
+        r"unable to (?:share|provide|give) (?:a )?(?:phone|number)|"
+        r"don't have (?:a )?direct (?:number|line)|"
+        r"no direct (?:number|line|phone)"
+        r")\b",
         re.IGNORECASE,
     ),
     "bank_accounts": re.compile(
-        r"\b(no account|can't share account|cannot share account|won't share account|don't have account)\b",
+        r"\b("
+        r"no account|can't share account|cannot share account|"
+        r"won't share account|don't have account|"
+        r"cannot provide (?:an? )?account|can't provide (?:an? )?account|"
+        r"unable to (?:share|provide) (?:an? )?account|"
+        r"no (?:bank )?account (?:number|detail)"
+        r")\b",
         re.IGNORECASE,
     ),
     "upi_ids": re.compile(
-        r"\b(no upi|can't share upi|cannot share upi|don't have upi|no vpa)\b",
+        r"\b("
+        r"no upi|can't share upi|cannot share upi|don't have upi|no vpa|"
+        r"cannot provide (?:a )?upi|can't provide (?:a )?upi|"
+        r"unable to (?:share|provide) (?:a )?upi|"
+        r"don't have (?:a )?upi|no upi (?:id|address)"
+        r")\b",
         re.IGNORECASE,
     ),
     "ifsc_codes": re.compile(
-        r"\b(no ifsc|can't share ifsc|cannot share ifsc|don't have ifsc)\b",
+        r"\b("
+        r"no ifsc|can't share ifsc|cannot share ifsc|don't have ifsc|"
+        r"cannot provide (?:an? )?ifsc|can't provide (?:an? )?ifsc|"
+        r"unable to (?:share|provide) (?:an? )?ifsc"
+        r")\b",
         re.IGNORECASE,
     ),
     "urls": re.compile(
-        r"\b(no link|can't send link|cannot send link|no website|we cannot provide a link)\b",
+        r"\b("
+        r"no link|can't send link|cannot send link|no website|"
+        r"we cannot provide a link|cannot provide (?:a |an? (?:email )?)?link|"
+        r"can't provide (?:a |an? )?link|unable to (?:send|provide|share) (?:a )?link|"
+        r"won't (?:be able to )?(?:send|provide|share) (?:a )?link|"
+        r"we do not (?:send|provide|have) (?:a )?link|"
+        r"no (?:official )?(?:link|portal|website|url)|"
+        r"cannot provide (?:a |an? )?(?:portal|website|url)|"
+        r"don't have (?:a )?(?:link|portal|website)|"
+        r"not possible (?:to share|via) (?:a )?link|"
+        r"no (?:secure )?(?:link|portal) available"
+        r")\b",
         re.IGNORECASE,
     ),
 }
@@ -267,26 +318,11 @@ def detect_single_value_confirmations(text: str) -> set[str]:
 # ---------------------------------------------------------------------------
 
 _DENIAL_DETECTION_SYSTEM_PROMPT = """\
-You are a forensic analyst in a honeypot investigation.
+Flag fields the scammer EXPLICITLY refuses to provide (says cannot/will not/do not).
+Do NOT flag fields merely not mentioned — only explicit refusals.
 
-Analyse the scammer's message and determine whether the scammer **explicitly refuses
-or denies** providing any of the following types of information. Only flag a field
-as denied if the scammer clearly states they CANNOT, WILL NOT, or DO NOT provide it.
-
-Do NOT flag a field merely because the scammer didn't mention it — only flag when
-there is an **explicit refusal or denial** in the message.
-
-Return a JSON object with these boolean fields (true = scammer explicitly refused):
-{
-  "phone_numbers_denied": false,
-  "bank_accounts_denied": false,
-  "upi_ids_denied": false,
-  "urls_denied": false,
-  "email_addresses_denied": false,
-  "ifsc_codes_denied": false
-}
-
-Return ONLY the JSON object, no extra text."""
+Return ONLY JSON:
+{"phone_numbers_denied":false,"bank_accounts_denied":false,"upi_ids_denied":false,"urls_denied":false,"email_addresses_denied":false,"ifsc_codes_denied":false}"""
 
 
 async def detect_denials_llm(text: str) -> set[str]:
@@ -416,6 +452,15 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
     text_lower = text.lower()
     result.suspicious_keywords = [kw for kw in _SCAM_KEYWORDS if kw in text_lower]
 
+    # 8. Case IDs
+    result.case_ids = list(set(m.group() for m in _CASE_ID_PATTERN.finditer(text)))
+
+    # 9. Policy numbers
+    result.policy_numbers = list(set(m.group() for m in _POLICY_NUMBER_PATTERN.finditer(text)))
+
+    # 10. Order numbers
+    result.order_numbers = list(set(m.group() for m in _ORDER_NUMBER_PATTERN.finditer(text)))
+
     return result
 
 
@@ -494,6 +539,7 @@ def merge_intelligence(
     for key in (
         "phone_numbers", "bank_accounts", "upi_ids",
         "urls", "email_addresses", "ifsc_codes", "suspicious_keywords",
+        "case_ids", "policy_numbers", "order_numbers",
     ):
         existing_set = set(existing.get(key, []))
         new_set = set(getattr(new, key, []))

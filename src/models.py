@@ -72,6 +72,9 @@ class HoneypotSession(Base):
     urls = Column(Text, default="[]")
     email_addresses = Column(Text, default="[]")
     ifsc_codes = Column(Text, default="[]")
+    case_ids = Column(Text, default="[]")
+    policy_numbers = Column(Text, default="[]")
+    order_numbers = Column(Text, default="[]")
     suspicious_keywords = Column(Text, default="[]")
 
     # Platform metadata
@@ -86,6 +89,9 @@ class HoneypotSession(Base):
     # Callback tracking
     final_callback_sent = Column(Boolean, default=False)
     final_callback_payload = Column(Text, nullable=True)  # JSON string
+
+    # Confidence level from analyst
+    confidence_level = Column(String(50), nullable=True)
 
     # Agent state
     agent_state_json = Column(Text, nullable=True)  # JSON string
@@ -153,6 +159,24 @@ class HoneypotSession(Base):
     def set_suspicious_keywords(self, v: list):
         self._set_json_list("suspicious_keywords", v)
 
+    def get_case_ids(self) -> list:
+        return self._get_json_list("case_ids")
+
+    def set_case_ids(self, v: list):
+        self._set_json_list("case_ids", v)
+
+    def get_policy_numbers(self) -> list:
+        return self._get_json_list("policy_numbers")
+
+    def set_policy_numbers(self, v: list):
+        self._set_json_list("policy_numbers", v)
+
+    def get_order_numbers(self) -> list:
+        return self._get_json_list("order_numbers")
+
+    def set_order_numbers(self, v: list):
+        self._set_json_list("order_numbers", v)
+
     def get_agent_state(self) -> dict:
         if not self.agent_state_json:
             return {}
@@ -184,6 +208,9 @@ class HoneypotSession(Base):
             "urls": len(self.get_urls()),
             "email_addresses": len(self.get_email_addresses()),
             "ifsc_codes": len(self.get_ifsc_codes()),
+            "case_ids": len(self.get_case_ids()),
+            "policy_numbers": len(self.get_policy_numbers()),
+            "order_numbers": len(self.get_order_numbers()),
         }
 
 

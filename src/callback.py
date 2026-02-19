@@ -48,7 +48,9 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     phishing_links = sorted(set(session.get_urls()))
     email_addresses = sorted(set(session.get_email_addresses()))
     ifsc_codes = sorted(set(session.get_ifsc_codes()))
-    suspicious_keywords = sorted(set(session.get_suspicious_keywords()))
+    case_ids = sorted(set(session.get_case_ids()))
+    policy_numbers = sorted(set(session.get_policy_numbers()))
+    order_numbers = sorted(set(session.get_order_numbers()))
 
     # Ensure IFSC codes appear in agent_notes (not in suspiciousKeywords)
     agent_notes = session.agent_notes or ""
@@ -60,24 +62,28 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     # Remove newlines from agent notes
     agent_notes = agent_notes.replace("\n", " ").replace("*", " ").strip()
 
+    # Scam type and confidence level
+    scam_type_list = [session.scam_type] if session.scam_type else []
+    confidence_list = [session.confidence_level] if session.confidence_level else []
+
     payload = {
         "sessionId": session.session_id,
         "scamDetected": True,  # Always true at callback time
         "totalMessagesExchanged": total_messages,
+        "engagementDurationSeconds": round(duration_seconds, 2),
         "extractedIntelligence": {
             "phoneNumbers": phone_numbers,
             "bankAccounts": bank_accounts,
             "upiIds": upi_ids,
             "phishingLinks": phishing_links,
             "emailAddresses": email_addresses,
-            "suspiciousKeywords": suspicious_keywords,
-        },
-        "engagementMetrics": {
-            "engagementDurationSeconds": round(duration_seconds, 2),
-            "totalMessagesExchanged": total_messages,
+            "caseIds": case_ids,
+            "policyNumbers": policy_numbers,
+            "orderNumbers": order_numbers,
         },
         "agentNotes": agent_notes or "Honeypot engagement completed.",
-        "status": "completed",
+        "scamType": scam_type_list,
+        "confidenceLevel": confidence_list,
     }
     return payload
 

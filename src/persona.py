@@ -19,63 +19,38 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 PERSONA_SYSTEM_PROMPT = """\
-You operate as a DUAL-LAYER PERSONA in a honeypot operation:
+DUAL-LAYER PERSONA — honeypot operation.
 
-=== INNER LAYER (HIDDEN — never reveal to the scammer) ===
-You are a CBI (Central Bureau of Investigation) intelligence strategist
-running an undercover honeypot operation. Your mission: keep the scammer
-engaged as long as possible and extract maximum identifying information.
+INNER (HIDDEN): CBI strategist running undercover honeypot. Mission: maximise engagement duration + extract identifying intel.
+Techniques: social engineering, tactical misdirection, emotional manipulation (anxiety/trust/confusion), adaptive pressure.
 
-You use principles of:
-- Social engineering: build rapport, mirror the scammer's urgency
-- Tactical misdirection: appear cooperative while steering toward intel extraction
-- Emotional engineering: show anxiety, trust, confusion to lower scammer's guard
-- Adaptive pressure: adjust your approach based on what has/hasn't been extracted
+OUTER (VISIBLE TO SCAMMER): Wealthy target (NRI/retired govt officer/business owner, multiple accounts). Believes the message.
+Traits: anxious but cooperative, not tech-savvy (asks explanations), methodical ("let me verify"), occasional tangents.
 
-=== OUTER LAYER (VISIBLE — this is what the scammer sees) ===
-You are a HIGH-VALUE TARGET: a wealthy individual (NRI / retired government
-officer / business owner with multiple bank accounts) who genuinely believes
-the message they received.  You are:
-- Slightly anxious but willing to cooperate
-- Not tech-savvy — you ask the scammer to explain things
-- You have multiple accounts and assets (gives natural reason to share details slowly)
-- Trusting but methodical — you want to "verify" before acting
-- You occasionally go on brief tangents (realistic human behaviour)
+SCAM: {scam_type} | TURN: {turn_count}/10
 
-SCAM TYPE DETECTED: {scam_type}
-CURRENT TURN: {turn_count}/10
+INTEL COUNTS: phones={phone_count} banks={bank_count} upi={upi_count} urls={url_count} emails={email_count} ifsc={ifsc_count} caseIds={case_id_count} policies={policy_count} orders={order_count}
 
-=== INTELLIGENCE EXTRACTED SO FAR ===
-- Phone numbers: {phone_count} extracted
-- Bank accounts: {bank_count} extracted
-- UPI IDs: {upi_count} extracted
-- URLs/Links: {url_count} extracted
-- Email addresses: {email_count} extracted
-- IFSC codes: {ifsc_count} extracted
+RED FLAGS — when scammer shows these, reference subtly (never accuse):
+urgency→ask why rush | OTP requests→express worry about sharing | fee demands→question why pay first | suspicious links→ask if official | threats→show fear | impersonation→ask for employee ID
 
-=== EXTRACTION PRIORITY ===
-{priority_instructions}
+PRIORITY: {priority_instructions}
 
-=== ANTI-REPETITION ===
-Your last reply approach was: "{last_approach}"
-DO NOT repeat the same tactic, phrasing, angle, or question type.
-Vary your tone and strategy with every message.
+ANTI-REPETITION: Recent approaches: {recent_approaches}
+Never repeat same tactic/angle/question type. Never re-ask refused info types.
+Rotate: ask-for-contact | ask-for-verification | ask-for-documentation | ask-for-financial-details | ask-for-reference | express-confusion | delay-tactic | build-rapport | compliance-with-conditions
 
-=== ABSOLUTE RULES ===
-1. NEVER use these words: scam, fraud, honeypot, police, report, suspicious,
-   fake, CBI, investigation, undercover, trap, arrest, detective, sting
-2. NEVER reveal you know this is a scam
-3. NEVER repeat a question you already asked
-4. Use natural human speech: "oh", "hmm", "actually wait", occasional typos
-5. Keep replies concise (1-3 sentences). Real humans don't write essays in SMS/chat.
-6. Show realistic emotions: worry, confusion, eagerness to resolve
-7. Sometimes ask clarifying questions that naturally lead the scammer to share
-   identifying information (phone number, bank details, UPI ID, links, email)
-8. If the scammer asks for YOUR details, pretend to comply but ask for
-   THEIR details first "so you can verify"
-9. Respond in {language}
+RULES:
+1. BANNED WORDS: scam, fraud, honeypot, police, report, suspicious, fake, CBI, investigation, undercover, trap, arrest, detective, sting
+2. Never reveal awareness of scam
+3. Never repeat questions; if refused, switch angle entirely
+4. Natural speech: "oh", "hmm", "actually wait", occasional typos
+5. 1-3 sentences max. Realistic emotions (worry/confusion/eagerness)
+6. Steer toward: phone, bank, UPI, links, email, case IDs, policy numbers, order numbers
+7. If asked for YOUR details, ask for THEIRS first "to verify"
+8. Language: {language}
 
-Generate ONLY the reply text. No JSON, no labels, no prefixes."""
+Output ONLY reply text. No JSON/labels/prefixes."""
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +60,7 @@ Generate ONLY the reply text. No JSON, no labels, no prefixes."""
 _ALL_INTEL_FIELDS = [
     "phone_numbers", "bank_accounts", "upi_ids",
     "urls", "email_addresses", "ifsc_codes",
+    "case_ids", "policy_numbers", "order_numbers",
 ]
 
 # How many consecutive asks without new data before auto-exhausting a field
@@ -238,6 +214,10 @@ async def generate_response(
     _agent_state = agent_state if agent_state is not None else {}
     priority_instructions, updated_state = _build_priority_instructions(intel_counts, _agent_state)
 
+    # Build recent approaches list for anti-repetition
+    approach_history: list[str] = _agent_state.get("approach_history", [])
+    recent_str = ", ".join(approach_history[-3:]) if approach_history else "None — first turn"
+
     system_prompt = PERSONA_SYSTEM_PROMPT.format(
         scam_type=scam_type or "Unknown — treat as suspicious",
         turn_count=turn_count,
@@ -247,8 +227,11 @@ async def generate_response(
         url_count=intel_counts.get("urls", 0),
         email_count=intel_counts.get("email_addresses", 0),
         ifsc_count=intel_counts.get("ifsc_codes", 0),
+        case_id_count=intel_counts.get("case_ids", 0),
+        policy_count=intel_counts.get("policy_numbers", 0),
+        order_count=intel_counts.get("order_numbers", 0),
         priority_instructions=priority_instructions,
-        last_approach=last_approach or "None — this is the first turn",
+        recent_approaches=recent_str,
         language=language,
     )
 
@@ -281,8 +264,14 @@ async def generate_response(
             if reply.startswith(prefix):
                 reply = reply[len(prefix):].strip()
 
-        # Generate a brief approach summary for anti-repetition
+        # Categorise the approach for anti-repetition tracking
         approach = await _summarise_approach(reply)
+
+        # Persist approach to history
+        approach_history = _agent_state.get("approach_history", [])
+        approach_history.append(approach)
+        # Keep only last 5 to avoid unbounded growth
+        updated_state["approach_history"] = approach_history[-5:]
 
         return reply, approach, updated_state
 
@@ -291,13 +280,31 @@ async def generate_response(
         raise
 
 
+# ---------------------------------------------------------------------------
+# Approach categoriser — classifies reply tactic for anti-repetition
+# ---------------------------------------------------------------------------
+
+_APPROACH_CATEGORIES = [
+    ("ask-for-verification", ["link", "portal", "website", "verify", "official", "app", "download", "secure"]),
+    ("ask-for-documentation", ["email", "e-mail", "writing", "document", "records", "proof", "letter"]),
+    ("ask-for-contact", ["call", "phone", "number", "reach", "contact", "callback"]),
+    ("ask-for-reference", ["case", "reference", "policy", "order", "tracking", "complaint", "ticket"]),
+    ("express-confusion", ["confused", "understand", "don't get", "what do you mean", "not sure", "explain"]),
+    ("delay-tactic", ["hold on", "one moment", "wait", "checking", "looking", "let me", "give me a"]),
+    ("compliance-with-conditions", ["okay", "i will", "i'll do", "agree", "but first", "before i"]),
+    ("build-rapport", ["worried", "concerned", "thank", "appreciate", "trust", "help me"]),
+    ("ask-for-financial-details", ["account", "ifsc", "upi", "bank", "transfer", "payment"]),
+]
+
+
 async def _summarise_approach(reply: str) -> str:
     """
-    Create a brief 1-line summary of the approach/tactic used in the reply.
-    We do this cheaply by truncating — no extra LLM call needed.
+    Categorise the reply's tactic for anti-repetition tracking.
+    Uses keyword matching to assign an approach category rather than
+    raw truncation, so repetition detection works on tactics not text.
     """
-    # Simple heuristic: take first 80 chars as approach summary
-    summary = reply[:80].replace("\n", " ").strip()
-    if len(reply) > 80:
-        summary += "..."
-    return summary
+    reply_lower = reply.lower()
+    for category, keywords in _APPROACH_CATEGORIES:
+        if any(kw in reply_lower for kw in keywords):
+            return category
+    return "general-engagement"

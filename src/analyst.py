@@ -23,39 +23,19 @@ class AnalysisResult:
     reasoning: str
 
 
-ANALYST_SYSTEM_PROMPT = """You are an expert fraud detection analyst specialising in Indian financial scams.
+ANALYST_SYSTEM_PROMPT = """Indian financial scam detection analyst.
 
-Your task: analyse the conversation and classify it as one of:
-- HONEYPOT: This is a scam. Confidence must be > {honeypot_threshold}.
-- LEGIT: This is definitely NOT a scam. Confidence must be > {legit_threshold} AND there must be zero scam indicators across ALL messages.
-- NEUTRAL: Insufficient evidence to decide conclusively.
+Classify conversation:
+- HONEYPOT (scam): confidence>{honeypot_threshold}
+- LEGIT (not scam): confidence>{legit_threshold}, zero indicators across ALL messages
+- NEUTRAL: insufficient evidence
 
-Scam types to identify (if applicable):
-- bank_fraud: Impersonating bank officials, requesting OTP/account details
-- upi_fraud: Fake UPI cashback, refund, or verification scams
-- phishing: Fake links, offers, product deals with malicious URLs
-- investment_fraud: Fake investment schemes, stock tips, crypto scams
-- lottery_fraud: Fake lottery/prize winnings requiring fees
-- job_fraud: Fake job offers requiring registration fees
-- impersonation: Impersonating government officials, police, etc.
-- other: Any other scam type
+Scam types: bank_fraud(OTP/account impersonation) | upi_fraud(fake cashback/refund) | phishing(malicious URLs) | kyc_fraud(fake KYC update) | job_fraud(fake job+fees) | lottery_fraud(fake prize+fees) | electricity_bill(fake utility payment) | govt_scheme(fake subsidy) | crypto_investment(fake platforms) | customs_parcel(fake duty) | tech_support(fake virus scare) | loan_approval(fake pre-approved loan) | income_tax(fake tax refund/notice) | refund_scam(fake refund processing) | insurance(fake claim/renewal)
 
-Analyse these scam indicators:
-- Urgency tactics ("immediately", "blocked", "expire")
-- Requests for sensitive info (OTP, passwords, account numbers)
-- Unsolicited contact about financial matters
-- Too-good-to-be-true offers
-- Pressure to act without verification
-- Requests to click links or download apps
-- Impersonation of authority figures
+Red flags: urgency/pressure, OTP/password requests, upfront fees, suspicious links/downloads, legal threats, authority impersonation, unsolicited financial contact, too-good-to-be-true offers.
 
-You MUST respond with valid JSON only:
-{{
-    "status": "HONEYPOT" | "NEUTRAL" | "LEGIT",
-    "scam_type": "bank_fraud" | "upi_fraud" | "phishing" | "investment_fraud" | "lottery_fraud" | "job_fraud" | "impersonation" | "other" | null,
-    "confidence": 0.0 to 1.0,
-    "reasoning": "Brief explanation of your analysis"
-}}"""
+Respond ONLY valid JSON:
+{{"status":"HONEYPOT"|"NEUTRAL"|"LEGIT","scam_type":"<type>"|null,"confidence":0.0-1.0,"reasoning":"1-2 sentences"}}"""
 
 
 def _build_user_prompt(
