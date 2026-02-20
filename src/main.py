@@ -36,6 +36,7 @@ from src.extractor import (
     detect_single_value_confirmations,
     has_reference_hints,
     extract_reference_ids,
+    extract_invalid_ifsc_hints,
 )
 from src.analyst import analyse_message
 from src.persona import generate_response
@@ -180,16 +181,21 @@ async def api_message(request: HoneypotRequest):
 async def _process_turn(request: HoneypotRequest) -> str:
     """Core processing pipeline for a single turn."""
 
-    def _append_agent_note(existing: str, note: str, max_len: int = 500) -> str:
+    def _append_agent_note(existing: str, note: str, max_len: int = 1000) -> str:
         note = (note or "").strip()
         if not note:
             return existing
+        # Exact duplicate check
         if note in existing:
+            return existing
+        # Semantic dedup: skip if first 60 chars of note already appear
+        note_prefix = note[:60]
+        if note_prefix and note_prefix in existing:
             return existing
         sep = " " if existing else ""
         combined = (existing + sep + note).strip()
         if len(combined) > max_len:
-            combined = combined[:max_len].rsplit(" ", 1)[0] + "..."
+            combined = combined[:max_len - 3].rsplit(" ", 1)[0] + "..."
         return combined
 
     db = SessionLocal()
@@ -267,6 +273,13 @@ async def _process_turn(request: HoneypotRequest) -> str:
             existing_notes = session.agent_notes or ""
             session.agent_notes = _append_agent_note(existing_notes, ifsc_note)
 
+        # ---- C3b. Invalid IFSC hints → agent_notes ----
+        invalid_ifsc = extract_invalid_ifsc_hints(normalised_text)
+        if invalid_ifsc:
+            hint_note = "Scammer provided invalid IFSC: " + ", ".join(invalid_ifsc)
+            existing_notes = session.agent_notes or ""
+            session.agent_notes = _append_agent_note(existing_notes, hint_note)
+
         # ---- C4. LLM extraction for case_ids, policy_numbers, order_numbers ----
         if has_reference_hints(normalised_text):
             ref_ids = await extract_reference_ids(normalised_text)
@@ -319,12 +332,15 @@ async def _process_turn(request: HoneypotRequest) -> str:
             scammer_count = 0
 
         # Trigger only when this is exactly the 19th scammer message (after extraction)
+        # Guard: check final_callback_sent FIRST so we never double-fire
         if (
-            scammer_count == 19
+            not session.final_callback_sent
+            and scammer_count == 19
             and (request.message.sender or "").lower() == "scammer"
-            and not session.final_callback_sent
         ):
             logger.info("19th scammer message reached — firing interim final callbacks")
+            # Set flag BEFORE firing to prevent the turn-10 block from re-triggering
+            session.final_callback_sent = True
             try:
                 success = await fire_callbacks(session)
                 db.commit()
@@ -333,6 +349,8 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 else:
                     logger.warning("One or more callbacks failed for session %s (19th message)", session.session_id)
             except Exception as exc:
+                # Reset flag if the callback itself failed
+                session.final_callback_sent = False
                 logger.error("Callback error for session %s at 19th message: %s", session.session_id, exc)
 
         # ---- E. Conditional translation ----

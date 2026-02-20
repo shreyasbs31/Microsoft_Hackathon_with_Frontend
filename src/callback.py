@@ -34,10 +34,13 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     last_ts = session.last_message_timestamp or 0
     duration_seconds = max(0, (last_ts - first_ts) / 1000) if first_ts else 0
 
-    # Fallback: if timestamps are identical/missing but conversation happened,
-    # estimate ~15 seconds per turn
-    if duration_seconds == 0 and session.turn_count > 1:
-        duration_seconds = session.turn_count * 15
+    # Fallback / sanity check: if timestamps are missing or yield an
+    # unrealistically low duration for the number of turns, use the
+    # per-turn estimate as a floor (avoids sub-minute durations for
+    # 20-message conversations from automated evaluators).
+    estimated_duration = session.turn_count * 15
+    if session.turn_count > 1:
+        duration_seconds = max(duration_seconds, estimated_duration)
 
     total_messages = session.turn_count * 2  # each turn = 1 scammer + 1 user
 

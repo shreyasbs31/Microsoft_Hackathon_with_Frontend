@@ -160,6 +160,11 @@ def _deobfuscate_url(url: str) -> str:
     url = url.replace('[.]', '.').replace('[:]', ':')
     return url
 
+
+def _clean_url_trailing(url: str) -> str:
+    """Strip trailing punctuation that regex greedily captured."""
+    return url.rstrip(',.;:!?)>\'\"]')
+
 # Email (generic)
 _EMAIL_PATTERN = re.compile(
     r'\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b'
@@ -169,6 +174,32 @@ _EMAIL_PATTERN = re.compile(
 _IFSC_PATTERN = re.compile(
     r'\b[A-Z]{4}0[A-Z0-9]{6}\b'
 )
+
+# Invalid IFSC hint: any short alphanumeric near 'IFSC' context that doesn't
+# match the real IFSC format — captured for agent_notes logging
+_IFSC_CONTEXT_HINT = re.compile(
+    r'(?:ifsc|i\.?f\.?s\.?c)\s*(?:code\s*)?(?:is|:)?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,14})',
+    re.IGNORECASE,
+)
+
+
+def extract_invalid_ifsc_hints(text: str) -> list[str]:
+    """Return values that look like IFSC attempts but don't match the real format.
+    These are logged in agentNotes so scammer-supplied invalid IFSCs aren't silently dropped.
+    """
+    hints: list[str] = []
+    for m in _IFSC_CONTEXT_HINT.finditer(text):
+        candidate = m.group(1).strip()
+        if not candidate:
+            continue
+        # Skip if it matches the real IFSC format (already captured elsewhere)
+        if _IFSC_PATTERN.match(candidate):
+            continue
+        # Must contain at least one digit to be a plausible IFSC
+        if not any(c.isdigit() for c in candidate):
+            continue
+        hints.append(candidate)
+    return hints
 
 # Bank account number: 9-18 digits, allow spaces/dashes in between.
 # Use lookarounds so that surrounding punctuation doesn't stop matches
@@ -469,7 +500,7 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
 
     # 4. URLs
     raw_urls = _URL_PATTERN.findall(text)
-    result.urls = list(set(_deobfuscate_url(u) for u in raw_urls))
+    result.urls = list(set(_clean_url_trailing(_deobfuscate_url(u)) for u in raw_urls))
 
     # 5. IFSC codes
     result.ifsc_codes = list(set(_IFSC_PATTERN.findall(text)))

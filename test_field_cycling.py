@@ -75,6 +75,9 @@ def test_phase2_transition():
         "urls": 1,
         "email_addresses": 1,
         "ifsc_codes": 1,
+        "case_ids": 1,
+        "policy_numbers": 1,
+        "order_numbers": 1,
     }
     instructions, state = _build_priority_instructions(counts, {})
     assert "URGENT" not in instructions
@@ -97,6 +100,9 @@ def test_field_exhaustion_after_max_asks():
         "urls": 1,
         "email_addresses": 1,
         "ifsc_codes": 1,
+        "case_ids": 1,
+        "policy_numbers": 1,
+        "order_numbers": 1,
     }
 
     state = {"initial_cycle_complete": True}
@@ -122,6 +128,9 @@ def test_all_exhausted_general_engagement():
         "urls": 1,
         "email_addresses": 1,
         "ifsc_codes": 1,
+        "case_ids": 1,
+        "policy_numbers": 1,
+        "order_numbers": 1,
     }
 
     state = {
@@ -129,6 +138,7 @@ def test_all_exhausted_general_engagement():
         "exhausted_fields": [
             "phone_numbers", "bank_accounts", "upi_ids",
             "urls", "email_addresses", "ifsc_codes",
+            "case_ids", "policy_numbers", "order_numbers",
         ],
     }
 
@@ -152,6 +162,9 @@ def test_denied_fields_skip_in_cycling():
         "urls": 1,
         "email_addresses": 1,
         "ifsc_codes": 1,
+        "case_ids": 1,
+        "policy_numbers": 1,
+        "order_numbers": 1,
     }
 
     state = {
@@ -186,6 +199,9 @@ def test_new_data_resets_ask_count():
         "urls": 1,
         "email_addresses": 1,
         "ifsc_codes": 1,
+        "case_ids": 1,
+        "policy_numbers": 1,
+        "order_numbers": 1,
     }
 
     state = {"initial_cycle_complete": True}
