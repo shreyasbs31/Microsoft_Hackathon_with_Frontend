@@ -98,5 +98,69 @@ class TestUnifiedExtraction(unittest.TestCase):
         result = extract_intelligence_regex("Your case ID is 2023-4567. Please proceed.")
         self.assertNotIn("2023-4567", result.employee_ids)
 
+    def test_bank_account_excludes_reference_ids(self):
+        """Test that digits embedded in reference IDs are NOT captured as bank accounts."""
+        from src.extractor import extract_intelligence_regex
+        text = "Your account is blocked. Reference is REF-2023-98765. Policy is POL-2023-98765."
+        result = extract_intelligence_regex(text)
+        self.assertNotIn("202398765", result.bank_accounts)
+
+    def test_upi_email_reclassification_requires_tld(self):
+        """Test that UPI→email reclassification requires a TLD (dot after @)."""
+        from src.extractor import extract_intelligence_regex
+        text = "Send to my email scammer.fraud@fakebank for processing"
+        result = extract_intelligence_regex(text)
+        # No TLD → should NOT appear in emails
+        self.assertNotIn("scammer.fraud@fakebank", result.email_addresses)
+
+    def test_upi_email_reclassification_with_tld(self):
+        """Test that UPI→email reclassification works when TLD is present."""
+        from src.extractor import extract_intelligence_regex
+        text = "Send to my email support@fakebank.com for processing"
+        result = extract_intelligence_regex(text)
+        self.assertIn("support@fakebank.com", result.email_addresses)
+
+    def test_llm_employee_word_filtered(self):
+        """Test that the literal word 'employee' is filtered from LLM employee_ids."""
+        asyncio.run(self._test_llm_employee_word_filtered())
+
+    async def _test_llm_employee_word_filtered(self):
+        import json
+        mock_resp = json.dumps({
+            "misc_notes": "",
+            "phone_numbers_denied": False,
+            "bank_accounts_denied": False,
+            "upi_ids_denied": False,
+            "urls_denied": False,
+            "email_addresses_denied": False,
+            "ifsc_codes_denied": False,
+            "case_ids": [],
+            "policy_numbers": [],
+            "order_numbers": [],
+            "employee_ids": ["employee", "98765", "EMP-123"]
+        })
+        with patch("src.llm_client.call_llm", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = mock_resp
+            result = await extract_llm_intelligence("test text")
+            # "employee" (no digits) should be filtered out
+            self.assertNotIn("employee", result["employee_ids"])
+            # "98765" has no alpha, but has digits — it should pass
+            # "EMP-123" has digits and is valid
+            self.assertIn("EMP-123", result["employee_ids"])
+
+    def test_merge_deconflicts_bank_vs_case_ids(self):
+        """Test that merge_intelligence removes bank accounts matching reference ID digits."""
+        from src.extractor import merge_intelligence, ExtractedIntelligence
+        existing = {
+            "phone_numbers": [], "bank_accounts": ["202398765"],
+            "upi_ids": [], "urls": [], "email_addresses": [],
+            "ifsc_codes": [], "suspicious_keywords": [],
+            "case_ids": ["REF-2023-98765"], "policy_numbers": [],
+            "order_numbers": [], "employee_ids": [],
+        }
+        new_intel = ExtractedIntelligence()
+        merged = merge_intelligence(existing, new_intel)
+        self.assertNotIn("202398765", merged["bank_accounts"])
+
 if __name__ == "__main__":
     unittest.main()

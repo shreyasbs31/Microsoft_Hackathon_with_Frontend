@@ -128,7 +128,15 @@ async def extract_llm_intelligence(text: str) -> dict:
         case_ids = [str(v) for v in data.get("case_ids", [])]
         policy_numbers = [str(v) for v in data.get("policy_numbers", [])]
         order_numbers = [str(v) for v in data.get("order_numbers", [])]
-        employee_ids = [str(v) for v in data.get("employee_ids", [])]
+        raw_emp_ids = [str(v) for v in data.get("employee_ids", [])]
+        # Filter out invalid employee IDs: must contain a digit and not be a common word
+        _llm_emp_stopwords = {"employee", "id", "agent", "code", "badge", "number", "na", "none", "n/a", "null", ""}
+        employee_ids = [
+            eid for eid in raw_emp_ids
+            if eid.lower().strip() not in _llm_emp_stopwords
+            and len(eid.strip()) >= 2
+            and any(c.isdigit() for c in eid)
+        ]
 
         return {
             "misc_notes": misc,
@@ -250,6 +258,11 @@ _BANK_CONTEXT_KEYWORDS = re.compile(
     r'account|a/c|acc\b|bank|number|no\.|credit|debit|savings|current',
     re.IGNORECASE,
 )
+# Reference-like prefixes: digits following these should NOT be treated as bank accounts
+_REFERENCE_PREFIX = re.compile(
+    r'(?:REF|POL|CASE|ORD|AWB|TXN|INV|TKT|CR|SR|COMP|FIR|NC|INC)[-\s]',
+    re.IGNORECASE,
+)
 
 # Suspicious keywords
 _SCAM_KEYWORDS = [
@@ -366,10 +379,13 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
             end = min(len(text), m.end() + 40)
             window = text[start:end].lower()
             if "email" in window or "e-mail" in window:
-                # Add to emails if not already there, then skip UPI
-                if cl not in email_set_lower:
-                    result.email_addresses.append(candidate)
-                    email_set_lower.add(cl)
+                # Only reclassify as email if the candidate has a valid TLD
+                # (i.e., a dot after the @). E.g. scammer@fakebank has no TLD.
+                if cl not in email_set_lower and '@' in candidate:
+                    domain_part = candidate.split('@')[1]
+                    if '.' in domain_part:
+                        result.email_addresses.append(candidate)
+                        email_set_lower.add(cl)
                 continue
                 
             upi_matches.append(candidate)
@@ -528,6 +544,13 @@ def _extract_bank_accounts(text: str) -> list[str]:
         # Check against the relaxed boilerplate rule
         if _is_boilerplate_number(digits):
             continue
+
+        # Skip digit sequences embedded in reference-like patterns
+        # e.g. REF-2023-98765, POL-2023-98765, CASE-12345
+        prefix_start = max(0, match.start() - 10)
+        prefix_text = text[prefix_start:match.start()]
+        if _REFERENCE_PREFIX.search(prefix_text):
+            continue
             
         # Increased window slightly to catch context in messy chats
         start = max(0, match.start() - 150)
@@ -557,4 +580,19 @@ def merge_intelligence(
         existing_set = set(existing.get(key, []))
         new_set = set(getattr(new, key, []))
         merged[key] = sorted(existing_set | new_set)
+
+    # Cross-deconflict: remove bank accounts whose digits match
+    # reference IDs (case_ids, policy_numbers, order_numbers)
+    ref_digit_sets: set[str] = set()
+    for ref_key in ("case_ids", "policy_numbers", "order_numbers"):
+        for ref_val in merged.get(ref_key, []):
+            ref_digits = re.sub(r'\D', '', ref_val)
+            if ref_digits:
+                ref_digit_sets.add(ref_digits)
+    if ref_digit_sets:
+        merged["bank_accounts"] = [
+            acct for acct in merged["bank_accounts"]
+            if acct not in ref_digit_sets
+        ]
+
     return merged
