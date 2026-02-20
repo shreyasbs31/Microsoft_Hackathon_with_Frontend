@@ -30,7 +30,6 @@ from src.extractor import (
     extract_and_detect_denials,
     merge_intelligence,
     normalise_text,
-    detect_denials,
     adjust_counts_for_denials,
     has_reference_hints,
     extract_reference_ids,
@@ -331,10 +330,14 @@ async def _process_turn(request: HoneypotRequest) -> str:
             logger.info("Translated [%s → English]: %s", language, analysis_text[:100])
 
         # ---- F. Conditional analyst (only when NEUTRAL) ----
+        # Truncate conversation history to the last 6 messages to save tokens and context limit
+        conv_history = request.conversationHistory or []
+        truncated_history = conv_history[-6:] if len(conv_history) > 6 else conv_history
+
         if session.status == SessionStatus.NEUTRAL:
             analysis = await analyse_message(
                 current_message=analysis_text,
-                conversation_history=request.conversationHistory,
+                conversation_history=truncated_history,
                 extracted_intel=merged_intel,
             )
             logger.info(
@@ -367,18 +370,14 @@ async def _process_turn(request: HoneypotRequest) -> str:
             # Load previously persisted denials
             persisted_denials = set(session.get_denied_fields())
             
-            # Check the translated/current message with regex and LLM
-            denied_fields |= detect_denials(analysis_text)
+            # Check the translated/current message with LLM
             denied_fields |= llm_denied
             single_value_fields |= detect_single_value_confirmations(analysis_text)
 
-            # Also scan the last few scammer messages from the conversation history
+            # Check up to last 3 scammer messages for single value confirmations
             try:
-                conv = request.conversationHistory or []
-                # Check up to last 3 scammer messages for explicit denials
-                scammer_msgs = [m for m in conv if (m.get("sender") or "").lower() == "scammer"]
+                scammer_msgs = [m for m in conv_history if (m.get("sender") or "").lower() == "scammer"]
                 for m in scammer_msgs[-3:]:
-                    denied_fields |= detect_denials(m.get("text", ""))
                     single_value_fields |= detect_single_value_confirmations(m.get("text", ""))
             except Exception:
                 pass
@@ -412,7 +411,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
 
             reply, approach_summary, updated_agent_state = await generate_response(
                 current_message=analysis_text,
-                conversation_history=request.conversationHistory,
+                conversation_history=truncated_history,
                 session_status=session.status.value,
                 scam_type=session.scam_type,
                 turn_count=session.turn_count + 1,

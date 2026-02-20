@@ -221,45 +221,13 @@ def test_new_data_resets_ask_count():
 
 
 # ---------------------------------------------------------------------------
-# Expanded denial pattern tests
-# ---------------------------------------------------------------------------
-
-def test_denial_url_implicit_link():
-    """'Cannot provide a link' should detect urls denial."""
-    from src.extractor import detect_denials
-    result = detect_denials("We cannot provide a link for security reasons.")
-    assert "urls" in result
-
-
-def test_denial_url_portal():
-    """'No portal available' should detect urls denial."""
-    from src.extractor import detect_denials
-    result = detect_denials("Sorry, there is no portal available for this.")
-    assert "urls" in result
-
-
-def test_denial_email_security():
-    """'For security reasons we cannot email' should detect email denial."""
-    from src.extractor import detect_denials
-    result = detect_denials("For security reasons we cannot email you the details.")
-    assert "email_addresses" in result
-
-
-def test_denial_no_false_positive():
-    """'Please send the OTP' should NOT trigger any denial."""
-    from src.extractor import detect_denials
-    result = detect_denials("Please send the OTP you received right now.")
-    assert len(result) == 0
-
-
-# ---------------------------------------------------------------------------
 # Approach categoriser tests
 # ---------------------------------------------------------------------------
 
 def test_approach_categoriser_link():
     import asyncio
     from src.persona import _summarise_approach
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         _summarise_approach("Can you send me a link to the official SBI portal?")
     )
     assert result == "ask-for-verification"
@@ -268,7 +236,7 @@ def test_approach_categoriser_link():
 def test_approach_categoriser_confusion():
     import asyncio
     from src.persona import _summarise_approach
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         _summarise_approach("I'm so confused by this. What do you mean by OTP?")
     )
     assert result == "express-confusion"
@@ -277,7 +245,7 @@ def test_approach_categoriser_confusion():
 def test_approach_categoriser_delay():
     import asyncio
     from src.persona import _summarise_approach
-    result = asyncio.get_event_loop().run_until_complete(
+    result = asyncio.run(
         _summarise_approach("Hold on, let me just check my other accounts first.")
     )
     assert result == "delay-tactic"
