@@ -27,19 +27,25 @@ class ExtractedIntelligence:
     case_ids: list[str] = field(default_factory=list)
     policy_numbers: list[str] = field(default_factory=list)
     order_numbers: list[str] = field(default_factory=list)
+    employee_ids: list[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
-# LLM-based misc-notes extraction
+# LLM-based unified extraction (misc notes + denials + reference IDs)
 # ---------------------------------------------------------------------------
 
-_MISC_AND_DENIALS_SYSTEM_PROMPT = """\
+_UNIFIED_EXTRACTOR_SYSTEM_PROMPT = """\
 Extract contextual intel from scammer message. Ignore phones/accounts/UPI/URLs/emails/IFSC/keywords (handled separately).
 Focus: names, orgs, addresses, apps, reference IDs, threats, impersonated entities.
-Max 2 sentences. If nothing noteworthy: NONE
+Max 2 sentences for misc_notes. If nothing noteworthy: NONE
 
 ALSO flag fields the scammer EXPLICITLY refuses to provide (says cannot/will not/do not).
 Do NOT flag fields merely not mentioned — only explicit refusals.
+
+ALSO extract reference identifiers. Return the FULL reference ID exactly as stated, including any prefix.
+Example: "CASE-12345" → extract "CASE-12345". "REF987654" → extract "REF987654". "policy LIC-99887766" → extract "LIC-99887766".
+Rules: case_ids = case/reference/complaint/FIR/ticket/CRN IDs. policy_numbers = insurance/policy/LIC numbers. order_numbers = order/AWB/tracking/shipment IDs.
+Empty lists if none found.
 
 Return ONLY valid JSON in this exact format:
 {
@@ -49,36 +55,52 @@ Return ONLY valid JSON in this exact format:
   "upi_ids_denied": false,
   "urls_denied": false,
   "email_addresses_denied": false,
-  "ifsc_codes_denied": false
+  "ifsc_codes_denied": false,
+  "case_ids": [],
+  "policy_numbers": [],
+  "order_numbers": []
 }"""
 
-async def extract_and_detect_denials(text: str) -> dict:
+
+async def extract_llm_intelligence(text: str) -> dict:
     """
-    Combined LLM call: misc notes + denial detection in one request.
-    Returns: {"misc_notes": str, "denied_fields": set[str]}
+    Single unified LLM call: misc notes + denial detection + reference IDs.
+    Returns: {
+        "misc_notes": str,
+        "denied_fields": set[str],
+        "case_ids": list[str],
+        "policy_numbers": list[str],
+        "order_numbers": list[str],
+    }
     """
     from src.llm_client import call_llm
-    
-    empty_result = {"misc_notes": "", "denied_fields": set()}
-    
+
+    empty_result = {
+        "misc_notes": "",
+        "denied_fields": set(),
+        "case_ids": [],
+        "policy_numbers": [],
+        "order_numbers": [],
+    }
+
     if not text or not text.strip():
         return empty_result
 
     try:
         raw = await call_llm(
             role="extractor",
-            system_prompt=_MISC_AND_DENIALS_SYSTEM_PROMPT,
+            system_prompt=_UNIFIED_EXTRACTOR_SYSTEM_PROMPT,
             user_prompt=f"Analyse this scammer message:\n\n{text}",
             json_mode=True,
         )
         raw = raw.strip()
         data = dict(json.loads(raw))
-        
+
         # Process misc notes
         misc = data.get("misc_notes", "").strip()
         if misc.upper() == "NONE":
             misc = ""
-            
+
         # Extract denials
         _key_map = {
             "phone_numbers_denied": "phone_numbers",
@@ -96,59 +118,29 @@ async def extract_and_detect_denials(text: str) -> dict:
 
         if denied:
             logger.info("LLM denial detection flagged: %s", denied)
-            
-        return {"misc_notes": misc, "denied_fields": denied}
+
+        # Extract reference IDs
+        case_ids = [str(v) for v in data.get("case_ids", [])]
+        policy_numbers = [str(v) for v in data.get("policy_numbers", [])]
+        order_numbers = [str(v) for v in data.get("order_numbers", [])]
+
+        return {
+            "misc_notes": misc,
+            "denied_fields": denied,
+            "case_ids": case_ids,
+            "policy_numbers": policy_numbers,
+            "order_numbers": order_numbers,
+        }
 
     except Exception as exc:
-        logger.warning("LLM combined extraction failed: %s", exc)
+        logger.warning("LLM unified extraction failed: %s", exc)
         return empty_result
 
 
-# ---------------------------------------------------------------------------
-# LLM-based reference ID extraction  (case IDs, policy numbers, order numbers)
-# ---------------------------------------------------------------------------
-
-_REFERENCE_IDS_SYSTEM_PROMPT = """\
-Extract reference identifiers from scammer message. Return the FULL reference ID exactly as stated, including any prefix.
-Example: if message says "CASE-12345" → extract "CASE-12345". If "REF987654" → extract "REF987654". If "policy LIC-99887766" → extract "LIC-99887766". If just "12345" with no prefix → extract "12345".
-
-Return ONLY valid JSON:
-{"case_ids":[],"policy_numbers":[],"order_numbers":[]}
-Rules: case_ids = case/reference/complaint/FIR/ticket/CRN IDs. policy_numbers = insurance/policy/LIC numbers. order_numbers = order/AWB/tracking/shipment IDs.
-Empty lists if none found."""
-
-
+# Keep for backward compatibility / utility
 def has_reference_hints(text: str) -> bool:
     """Cheap regex pre-check: returns True if text likely contains reference IDs."""
     return bool(_REFERENCE_HINT_PATTERN.search(text))
-
-
-async def extract_reference_ids(text: str) -> dict[str, list[str]]:
-    """
-    LLM-based extraction for case_ids, policy_numbers, order_numbers.
-    Returns dict with those three keys (lists of strings).
-    Only call when has_reference_hints(text) is True.
-    """
-    from src.llm_client import call_llm
-    import json as _json
-
-    empty = {"case_ids": [], "policy_numbers": [], "order_numbers": []}
-    try:
-        raw = await call_llm(
-            role="extractor",
-            system_prompt=_REFERENCE_IDS_SYSTEM_PROMPT,
-            user_prompt=text,
-            json_mode=True,
-        )
-        parsed = _json.loads(raw.strip())
-        return {
-            "case_ids": [str(v) for v in parsed.get("case_ids", [])],
-            "policy_numbers": [str(v) for v in parsed.get("policy_numbers", [])],
-            "order_numbers": [str(v) for v in parsed.get("order_numbers", [])],
-        }
-    except Exception as exc:
-        logger.warning("LLM reference-ID extraction failed: %s", exc)
-        return empty
 
 
 # =========================================================================
@@ -329,7 +321,7 @@ def detect_single_value_confirmations(text: str) -> set[str]:
 
 
 # Old single-purpose LLM denial detection removed to avoid redundancy;
-# logic is now merged into extract_and_detect_denials.
+# logic is now merged into extract_llm_intelligence.
 
 
 def normalise_text(text: str) -> str:
@@ -413,8 +405,10 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
     text_lower = text.lower()
     result.suspicious_keywords = [kw for kw in _SCAM_KEYWORDS if kw in text_lower]
 
-    # 8-10: case_ids, policy_numbers, order_numbers handled by LLM extraction
-    # (called separately in main.py only when reference hints are detected)
+    # 8. Employee IDs (context-aware regex)
+    result.employee_ids = _extract_employee_ids(text)
+
+    # 9-11: case_ids, policy_numbers, order_numbers handled by LLM extraction
 
     return result
 
@@ -442,6 +436,32 @@ def _normalise_phone(raw: str) -> str:
     # Fallback: return digits with + if originally present
     return "+" + digits if has_plus else digits
 
+
+
+# Employee ID regex: matches common formats like EMP12345, EID-456, AGENT-789,
+# or contextual patterns like "employee id: ABC123", "staff id 456", "badge number 789"
+_EMPLOYEE_ID_CONTEXT = re.compile(
+    r'(?:employee|emp|staff|agent|badge|officer|personnel)\s*(?:id|i\.?d\.?|number|no\.?|code|#)?\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,20})',
+    re.IGNORECASE,
+)
+_EMPLOYEE_ID_PREFIX = re.compile(
+    r'\b(?:EMP|EID|AGENT|STAFF|BADGE)[\-]?[A-Z0-9]{2,15}\b',
+    re.IGNORECASE,
+)
+
+
+def _extract_employee_ids(text: str) -> list[str]:
+    """Extract employee/agent/staff IDs from text using context-aware regex."""
+    results: set[str] = set()
+    # Prefix-based (high confidence): EMP12345, EID-456, AGENT-789
+    for m in _EMPLOYEE_ID_PREFIX.finditer(text):
+        results.add(m.group().strip())
+    # Context-based: "employee id: ABC123"
+    for m in _EMPLOYEE_ID_CONTEXT.finditer(text):
+        candidate = m.group(1).strip()
+        if candidate and len(candidate) >= 3:
+            results.add(candidate)
+    return sorted(results)
 
 
 def _is_boilerplate_number(digits: str) -> bool:
@@ -494,7 +514,7 @@ def merge_intelligence(
     for key in (
         "phone_numbers", "bank_accounts", "upi_ids",
         "urls", "email_addresses", "ifsc_codes", "suspicious_keywords",
-        "case_ids", "policy_numbers", "order_numbers",
+        "case_ids", "policy_numbers", "order_numbers", "employee_ids",
     ):
         existing_set = set(existing.get(key, []))
         new_set = set(getattr(new, key, []))

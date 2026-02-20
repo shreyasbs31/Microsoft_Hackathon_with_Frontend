@@ -87,6 +87,7 @@ class HoneypotSession(Base):
     policy_numbers = Column(Text, default="[]")
     order_numbers = Column(Text, default="[]")
     suspicious_keywords = Column(Text, default="[]")
+    employee_ids = Column(Text, default="[]")
     denied_fields = Column(Text, default="[]")
 
     # Platform metadata
@@ -195,6 +196,12 @@ class HoneypotSession(Base):
     def set_order_numbers(self, v: list):
         self._set_json_list("order_numbers", v)
 
+    def get_employee_ids(self) -> list:
+        return self._get_json_list("employee_ids")
+
+    def set_employee_ids(self, v: list):
+        self._set_json_list("employee_ids", v)
+
     def get_agent_state(self) -> dict:
         if not self.agent_state_json:
             return {}
@@ -229,6 +236,7 @@ class HoneypotSession(Base):
             "case_ids": len(self.get_case_ids()),
             "policy_numbers": len(self.get_policy_numbers()),
             "order_numbers": len(self.get_order_numbers()),
+            "employee_ids": len(self.get_employee_ids()),
         }
 
 

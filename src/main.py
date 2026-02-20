@@ -27,12 +27,10 @@ from src.models import (
 from src.session_lock import session_lock_manager
 from src.extractor import (
     extract_intelligence_regex,
-    extract_and_detect_denials,
+    extract_llm_intelligence,
     merge_intelligence,
     normalise_text,
     adjust_counts_for_denials,
-    has_reference_hints,
-    extract_reference_ids,
     extract_invalid_ifsc_hints,
     detect_single_value_confirmations,
 )
@@ -260,8 +258,8 @@ async def _process_turn(request: HoneypotRequest) -> str:
         # ---- C. Regex extraction for structured fields ----
         new_intel = extract_intelligence_regex(normalised_text)
 
-        # ---- C2. LLM extraction for misc contextual notes and denials ----
-        combined_result = await extract_and_detect_denials(normalised_text)
+        # ---- C2. Unified LLM extraction for misc notes, denials, and reference IDs ----
+        combined_result = await extract_llm_intelligence(normalised_text)
         misc_notes = combined_result.get("misc_notes", "")
         llm_denied = combined_result.get("denied_fields", set())
 
@@ -282,18 +280,16 @@ async def _process_turn(request: HoneypotRequest) -> str:
             existing_notes = session.agent_notes or ""
             session.agent_notes = _append_agent_note(existing_notes, hint_note)
 
-        # ---- C4. LLM extraction for case_ids, policy_numbers, order_numbers ----
-        if has_reference_hints(normalised_text):
-            ref_ids = await extract_reference_ids(normalised_text)
-            for cid in ref_ids.get("case_ids", []):
-                if cid and cid not in new_intel.case_ids:
-                    new_intel.case_ids.append(cid)
-            for pn in ref_ids.get("policy_numbers", []):
-                if pn and pn not in new_intel.policy_numbers:
-                    new_intel.policy_numbers.append(pn)
-            for on in ref_ids.get("order_numbers", []):
-                if on and on not in new_intel.order_numbers:
-                    new_intel.order_numbers.append(on)
+        # ---- C4. Merge LLM-extracted reference IDs into new_intel ----
+        for cid in combined_result.get("case_ids", []):
+            if cid and cid not in new_intel.case_ids:
+                new_intel.case_ids.append(cid)
+        for pn in combined_result.get("policy_numbers", []):
+            if pn and pn not in new_intel.policy_numbers:
+                new_intel.policy_numbers.append(pn)
+        for on in combined_result.get("order_numbers", []):
+            if on and on not in new_intel.order_numbers:
+                new_intel.order_numbers.append(on)
 
         # ---- D. Merge intel with session data ----
         existing_intel = {
@@ -307,6 +303,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
             "case_ids": session.get_case_ids(),
             "policy_numbers": session.get_policy_numbers(),
             "order_numbers": session.get_order_numbers(),
+            "employee_ids": session.get_employee_ids(),
         }
         merged_intel = merge_intelligence(existing_intel, new_intel)
 
@@ -321,6 +318,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
         session.set_case_ids(merged_intel["case_ids"])
         session.set_policy_numbers(merged_intel["policy_numbers"])
         session.set_order_numbers(merged_intel["order_numbers"])
+        session.set_employee_ids(merged_intel["employee_ids"])
 
         # ---- E. Conditional translation ----
         analysis_text = normalised_text

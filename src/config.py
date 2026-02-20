@@ -44,6 +44,9 @@ CALLBACK_TIMEOUT_SECONDS = int(os.getenv("CALLBACK_TIMEOUT_SECONDS", "5"))
 # --- Conversation ---
 MAX_TURNS = int(os.getenv("MAX_TURNS", "10"))
 
+# --- Engagement Duration ---
+ESTIMATED_SECONDS_PER_TURN = int(os.getenv("ESTIMATED_SECONDS_PER_TURN", "15"))
+
 # --- Classification Thresholds ---
 HONEYPOT_CONFIDENCE_THRESHOLD = float(os.getenv("HONEYPOT_CONFIDENCE_THRESHOLD", "0.5"))
 LEGIT_CONFIDENCE_THRESHOLD = float(os.getenv("LEGIT_CONFIDENCE_THRESHOLD", "0.8"))

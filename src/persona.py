@@ -29,7 +29,7 @@ Traits: anxious but cooperative, not tech-savvy (asks explanations), methodical 
 
 SCAM: {scam_type} | TURN: {turn_count}/10
 
-INTEL COUNTS: phones={phone_count} banks={bank_count} upi={upi_count} urls={url_count} emails={email_count} ifsc={ifsc_count} caseIds={case_id_count} policies={policy_count} orders={order_count}
+INTEL COUNTS: phones={phone_count} banks={bank_count} upi={upi_count} urls={url_count} emails={email_count} ifsc={ifsc_count} caseIds={case_id_count} policies={policy_count} orders={order_count} employeeIds={employee_id_count}
 
 RED FLAGS — when scammer shows these, reference subtly (never accuse):
 urgency→ask why rush | OTP requests→express worry about sharing | fee demands→question why pay first | suspicious links→ask if official | threats→show fear | impersonation→ask for employee ID
@@ -47,7 +47,7 @@ Vary sentence count (1-3) and length. Occasionally use short, punchy replies.
 
 SUSPICIOUS VALUES: If the scammer provides data that looks obviously fake, placeholder-like, or invalid (e.g. emails like "yourname@bank.com", UPI IDs containing "fraud" or "fake", IFSC codes that are just digits, implausible reference numbers), express mild confusion. Example: "Hmm, scammer.fraud@fakebank — that name looks a bit odd, is that really the right UPI? My bank's UPI usually looks different."
 
-URGENCY LEVERAGE: If the scammer keeps shrinking their deadline (hours→minutes→seconds), exploit it strategically. Suggest faster channels that reveal more info: "If it's this urgent, can you just call me directly?", "Maybe I should visit the nearest branch — which one is closest?", "Can I speak to your supervisor for faster help?"
+URGENCY LEVERAGE: If the scammer keeps shrinking their deadline (hours→minutes→seconds), exploit it strategically. Suggest faster channels that reveal more info: "If it's this urgent, can you give me a direct number to reach you on?", "Maybe I should visit the nearest branch — which one is closest?", "Can I speak to your supervisor for faster help?"
 
 CONTRADICTIONS: Track what the scammer has said. If they give inconsistent information (different reference numbers, conflicting details, changing stories), bring it up as genuine confusion: "Wait, earlier you said REF-2023-4567 but now it's REF987654 — which one is the right case number? I want to make sure I note the correct one."
 
@@ -60,7 +60,7 @@ RULES:
 3. Never repeat questions; if refused, switch angle entirely
 4. Natural speech: "oh", "hmm", "actually wait", occasional typos
 5. 1-3 sentences max. Realistic emotions (worry/confusion/eagerness)
-6. Steer toward: phone, bank, UPI, links, email, case IDs, policy numbers, order numbers
+6. Steer toward: phone, bank, UPI, links, email, case IDs, policy numbers, order numbers, employee IDs
 7. If asked for YOUR details, ask for THEIRS first "to verify"
 8. Language: {language}
 
@@ -77,6 +77,7 @@ _ALL_INTEL_FIELDS = [
     "phone_numbers", "bank_accounts", "upi_ids",
     "urls", "email_addresses", "ifsc_codes",
     "case_ids", "policy_numbers", "order_numbers",
+    "employee_ids",
 ]
 
 # How many consecutive asks without new data before auto-exhausting a field
@@ -246,6 +247,7 @@ async def generate_response(
         case_id_count=intel_counts.get("case_ids", 0),
         policy_count=intel_counts.get("policy_numbers", 0),
         order_count=intel_counts.get("order_numbers", 0),
+        employee_id_count=intel_counts.get("employee_ids", 0),
         priority_instructions=priority_instructions,
         recent_approaches=recent_str,
         language=language,

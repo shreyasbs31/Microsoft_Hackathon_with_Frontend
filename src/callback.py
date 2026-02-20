@@ -16,6 +16,7 @@ from src.config import (
     GUVI_CALLBACK_URL_1,
     GUVI_CALLBACK_URL_2,
     CALLBACK_TIMEOUT_SECONDS,
+    ESTIMATED_SECONDS_PER_TURN,
 )
 from src.models import HoneypotSession
 
@@ -34,13 +35,9 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
     last_ts = session.last_message_timestamp or 0
     duration_seconds = max(0, (last_ts - first_ts) / 1000) if first_ts else 0
 
-    # Fallback / sanity check: if timestamps are missing or yield an
-    # unrealistically low duration for the number of turns, use the
-    # per-turn estimate as a floor (avoids sub-minute durations for
-    # 20-message conversations from automated evaluators).
-    estimated_duration = session.turn_count * 15
-    if session.turn_count > 1:
-        duration_seconds = max(duration_seconds, estimated_duration)
+    # Fallback: only use estimated duration when timestamps are missing/zero
+    if duration_seconds == 0 and session.turn_count > 0:
+        duration_seconds = session.turn_count * ESTIMATED_SECONDS_PER_TURN
 
     total_messages = session.turn_count * 2  # each turn = 1 scammer + 1 user
 
@@ -54,6 +51,7 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
     case_ids = sorted(set(session.get_case_ids()))
     policy_numbers = sorted(set(session.get_policy_numbers()))
     order_numbers = sorted(set(session.get_order_numbers()))
+    employee_ids = sorted(set(session.get_employee_ids()))
 
     # Ensure IFSC codes appear in agent_notes (not in suspiciousKeywords)
     agent_notes = session.agent_notes or ""
@@ -100,6 +98,7 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
             "caseIds": case_ids,
             "policyNumbers": policy_numbers,
             "orderNumbers": order_numbers,
+            "employeeIds": employee_ids,
         },
         "agentNotes": agent_notes or "Honeypot engagement completed.",
         "scamType": scam_type_val,
