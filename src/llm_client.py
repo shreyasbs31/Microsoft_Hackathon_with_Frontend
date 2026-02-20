@@ -1,16 +1,14 @@
-"""
-LLM client abstraction — Gemini primary, Groq fallback.
+"""LLM client abstraction — Gemini primary, Groq fallback.
 
-Provides a single `call_llm()` function that tries Gemini first
+Provides a single ``call_llm()`` function that tries Gemini first
 and falls back to Groq on any failure.  Includes model-name
 fallback lists so expired preview names are handled gracefully.
 Gemini calls retry once on empty response before falling back.
 """
 
+import asyncio
 import json
 import logging
-import asyncio
-import traceback
 from typing import Literal
 
 import google.generativeai as genai

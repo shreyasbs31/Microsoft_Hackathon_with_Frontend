@@ -10,6 +10,7 @@ gets appended to agent_notes.
 import json
 import logging
 import re
+import urllib.parse
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -346,13 +347,18 @@ def detect_single_value_confirmations(text: str) -> set[str]:
 
 def normalise_text(text: str) -> str:
     """Strip excess whitespace and decode common URL-encoded characters."""
-    import urllib.parse
     text = urllib.parse.unquote(text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 
 def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
+    """Extract structured intelligence fields from text using regex patterns.
+
+    Handles emails, UPI IDs, phone numbers, URLs, IFSC codes, bank accounts,
+    suspicious keywords, and employee IDs. Performs cross-deconfliction to
+    avoid overlapping matches between field types.
+    """
     result = ExtractedIntelligence()
 
     # 1. EMAIL ADDRESSES FIRST
@@ -394,8 +400,6 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
     result.upi_ids = list(dict.fromkeys(upi_matches))
     result.email_addresses = sorted(list(set(result.email_addresses)))
 
-    # ... [Rest of your extraction logic for Phones, URLs, IFSC, etc. remains the same] ...
-    
     # 3. Phone numbers
     phones: set[str] = set()
     for m in _PHONE_INDIA.finditer(text):
@@ -492,7 +496,12 @@ _EMPLOYEE_ID_STOPWORDS = {
 
 
 def _extract_employee_ids(text: str) -> list[str]:
-    """Extract employee/agent/staff IDs from text using context-aware regex."""
+    """Extract employee/agent/staff IDs from text using context-aware regex.
+
+    Uses prefix-based patterns (EMP12345, SBI-12345) and contextual patterns
+    ("employee id: ABC123"). Cross-deconflicts against IFSC code format to
+    prevent false positives.
+    """
     results: set[str] = set()
     # Prefix-based (high confidence): EMP12345, SBI-12345, etc.
     for m in _EMPLOYEE_ID_PREFIX.finditer(text):
@@ -519,19 +528,21 @@ def _extract_employee_ids(text: str) -> list[str]:
 
 
 def _is_boilerplate_number(digits: str) -> bool:
+    """Check if a digit sequence is a boilerplate/placeholder number.
+
+    Only flags sequences of the exact same digit (e.g., '999999999').
+    Ascending/descending sequences are intentionally allowed since scammers
+    sometimes use patterns like '123456789' as fake account numbers.
     """
-    Modified to be less aggressive. 
-    Only flags sequences of the exact same digit.
-    """
-    if len(set(digits)) == 1:
-        return True  # e.g., "999999999"
-    
-    # We remove the ascending/descending check because 
-    # scammers often use '123456789' as a placeholder 
-    # that we actually want to capture in our logs.
-    return False
+    return len(set(digits)) == 1
+
 
 def _extract_bank_accounts(text: str) -> list[str]:
+    """Extract bank account numbers from text using digit patterns with context.
+
+    Matches 9–18 digit sequences near banking keywords while excluding
+    boilerplate numbers and digits embedded in reference-like patterns.
+    """
     results: set[str] = set()
     for match in _BANK_ACCOUNT_DIGITS.finditer(text):
         raw = match.group()

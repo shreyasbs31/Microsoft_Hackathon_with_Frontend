@@ -1,8 +1,8 @@
-"""
-Database models — SQLAlchemy ORM for session state persistence.
-"""
+"""Database models — SQLAlchemy ORM for session state persistence."""
 
+import enum
 import json
+
 from sqlalchemy import (
     create_engine,
     Column,
@@ -14,7 +14,6 @@ from sqlalchemy import (
     Enum as SAEnum,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
-import enum
 
 from src.config import DATABASE_URL
 
@@ -49,19 +48,15 @@ Base = declarative_base()
 
 
 # ---------------------------------------------------------------------------
-# Helper: store JSON lists in TEXT columns
-# ---------------------------------------------------------------------------
-
-class JSONColumn(Text):
-    """Marker type — we serialise/deserialise manually."""
-    pass
-
-
-# ---------------------------------------------------------------------------
 # Session model
 # ---------------------------------------------------------------------------
 
 class HoneypotSession(Base):
+    """SQLAlchemy model for honeypot session state.
+
+    Stores classification status, extracted intelligence (as JSON-encoded
+    TEXT columns), conversation tracking metadata, and callback state.
+    """
     __tablename__ = "sessions"
 
     # Primary key
@@ -118,7 +113,8 @@ class HoneypotSession(Base):
     # Convenience helpers for JSON list columns
     # ------------------------------------------------------------------
 
-    def _get_json_list(self, attr: str) -> list:
+    def _get_json_list(self, attr: str) -> list[str]:
+        """Deserialise a JSON-encoded TEXT column into a Python list."""
         raw = getattr(self, attr)
         if not raw:
             return []
@@ -127,79 +123,80 @@ class HoneypotSession(Base):
         except (json.JSONDecodeError, TypeError):
             return []
 
-    def _set_json_list(self, attr: str, value: list):
+    def _set_json_list(self, attr: str, value: list[str]) -> None:
+        """Serialise a Python list into a JSON-encoded TEXT column."""
         setattr(self, attr, json.dumps(value))
 
-    def get_phone_numbers(self) -> list:
+    def get_phone_numbers(self) -> list[str]:
         return self._get_json_list("phone_numbers")
 
-    def set_phone_numbers(self, v: list):
+    def set_phone_numbers(self, v: list[str]) -> None:
         self._set_json_list("phone_numbers", v)
 
-    def get_bank_accounts(self) -> list:
+    def get_bank_accounts(self) -> list[str]:
         return self._get_json_list("bank_accounts")
 
-    def set_bank_accounts(self, v: list):
+    def set_bank_accounts(self, v: list[str]) -> None:
         self._set_json_list("bank_accounts", v)
 
-    def get_upi_ids(self) -> list:
+    def get_upi_ids(self) -> list[str]:
         return self._get_json_list("upi_ids")
 
-    def set_upi_ids(self, v: list):
+    def set_upi_ids(self, v: list[str]) -> None:
         self._set_json_list("upi_ids", v)
 
-    def get_urls(self) -> list:
+    def get_urls(self) -> list[str]:
         return self._get_json_list("urls")
 
-    def set_urls(self, v: list):
+    def set_urls(self, v: list[str]) -> None:
         self._set_json_list("urls", v)
 
-    def get_email_addresses(self) -> list:
+    def get_email_addresses(self) -> list[str]:
         return self._get_json_list("email_addresses")
 
-    def set_email_addresses(self, v: list):
+    def set_email_addresses(self, v: list[str]) -> None:
         self._set_json_list("email_addresses", v)
 
-    def get_ifsc_codes(self) -> list:
+    def get_ifsc_codes(self) -> list[str]:
         return self._get_json_list("ifsc_codes")
 
-    def set_ifsc_codes(self, v: list):
+    def set_ifsc_codes(self, v: list[str]) -> None:
         self._set_json_list("ifsc_codes", v)
 
-    def get_suspicious_keywords(self) -> list:
+    def get_suspicious_keywords(self) -> list[str]:
         return self._get_json_list("suspicious_keywords")
 
-    def set_suspicious_keywords(self, v: list):
+    def set_suspicious_keywords(self, v: list[str]) -> None:
         self._set_json_list("suspicious_keywords", v)
 
-    def get_denied_fields(self) -> list:
+    def get_denied_fields(self) -> list[str]:
         return self._get_json_list("denied_fields")
 
-    def set_denied_fields(self, v: list):
+    def set_denied_fields(self, v: list[str]) -> None:
         self._set_json_list("denied_fields", v)
 
-    def get_case_ids(self) -> list:
+    def get_case_ids(self) -> list[str]:
         return self._get_json_list("case_ids")
 
-    def set_case_ids(self, v: list):
+    def set_case_ids(self, v: list[str]) -> None:
         self._set_json_list("case_ids", v)
 
-    def get_policy_numbers(self) -> list:
+    def get_policy_numbers(self) -> list[str]:
         return self._get_json_list("policy_numbers")
 
-    def set_policy_numbers(self, v: list):
+    def set_policy_numbers(self, v: list[str]) -> None:
         self._set_json_list("policy_numbers", v)
 
-    def get_order_numbers(self) -> list:
+    def get_order_numbers(self) -> list[str]:
         return self._get_json_list("order_numbers")
 
-    def set_order_numbers(self, v: list):
+    def set_order_numbers(self, v: list[str]) -> None:
         self._set_json_list("order_numbers", v)
 
-    def get_employee_ids(self) -> list:
+    def get_employee_ids(self) -> list[str]:
         return self._get_json_list("employee_ids")
 
-    def set_employee_ids(self, v: list):
+    def set_employee_ids(self, v: list[str]) -> None:
         self._set_json_list("employee_ids", v)
 
     def get_agent_state(self) -> dict:
@@ -210,7 +207,7 @@ class HoneypotSession(Base):
         except (json.JSONDecodeError, TypeError):
             return {}
 
-    def set_agent_state(self, v: dict):
+    def set_agent_state(self, v: dict) -> None:
         self.agent_state_json = json.dumps(v)
 
     def get_callback_payload(self) -> dict | None:
@@ -221,7 +218,7 @@ class HoneypotSession(Base):
         except (json.JSONDecodeError, TypeError):
             return None
 
-    def set_callback_payload(self, v: dict):
+    def set_callback_payload(self, v: dict) -> None:
         self.final_callback_payload = json.dumps(v)
 
     def intel_counts(self) -> dict[str, int]:

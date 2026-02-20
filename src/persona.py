@@ -289,7 +289,7 @@ async def generate_response(
                 reply = reply[len(prefix):].strip()
 
         # Categorise the approach for anti-repetition tracking
-        approach = await _summarise_approach(reply)
+        approach = _summarise_approach(reply)
 
         # Persist approach to history
         approach_history = _agent_state.get("approach_history", [])
@@ -308,7 +308,8 @@ async def generate_response(
 # Approach categoriser — classifies reply tactic for anti-repetition
 # ---------------------------------------------------------------------------
 
-_APPROACH_CATEGORIES = [
+# Approach categories for anti-repetition tracking — maps tactic names to keywords
+_APPROACH_CATEGORIES: list[tuple[str, list[str]]] = [
     ("ask-for-verification", ["link", "portal", "website", "verify", "official", "app", "download", "secure"]),
     ("ask-for-documentation", ["email", "e-mail", "writing", "document", "records", "proof", "letter"]),
     ("ask-for-contact", ["call", "phone", "number", "reach", "contact", "callback"]),
@@ -321,9 +322,9 @@ _APPROACH_CATEGORIES = [
 ]
 
 
-async def _summarise_approach(reply: str) -> str:
-    """
-    Categorise the reply's tactic for anti-repetition tracking.
+def _summarise_approach(reply: str) -> str:
+    """Categorise the reply's tactic for anti-repetition tracking.
+
     Uses keyword matching to assign an approach category rather than
     raw truncation, so repetition detection works on tactics not text.
     """

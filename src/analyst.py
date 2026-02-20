@@ -41,7 +41,7 @@ Respond ONLY valid JSON:
 def _build_user_prompt(
     current_message: str,
     conversation_history: list[dict],
-    extracted_intel: dict[str, list],
+    extracted_intel: dict[str, list[str]],
 ) -> str:
     """Build the user prompt with conversation context."""
 

@@ -5,7 +5,6 @@ Multiple sessions run concurrently; within a single session, turns are serialise
 """
 
 import asyncio
-from collections import defaultdict
 
 
 class SessionLockManager:

@@ -12,6 +12,7 @@ import logging
 import random
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
@@ -174,25 +175,35 @@ async def api_message(request: HoneypotRequest):
     return await honeypot(request)
 
 
+# ---------------------------------------------------------------------------
+# Helper utilities
+# ---------------------------------------------------------------------------
+
+def _append_agent_note(existing: str, note: str, max_len: int = 1000) -> str:
+    """Append a note to agent_notes with deduplication and length limiting.
+
+    Skips exact duplicates and notes whose first 60 characters already appear
+    in the existing text. Truncates the combined result to *max_len* characters.
+    """
+    note = (note or "").strip()
+    if not note:
+        return existing
+    # Exact duplicate check
+    if note in existing:
+        return existing
+    # Semantic dedup: skip if first 60 chars of note already appear
+    note_prefix = note[:60]
+    if note_prefix and note_prefix in existing:
+        return existing
+    sep = " " if existing else ""
+    combined = (existing + sep + note).strip()
+    if len(combined) > max_len:
+        combined = combined[:max_len - 3].rsplit(" ", 1)[0] + "..."
+    return combined
+
+
 async def _process_turn(request: HoneypotRequest) -> str:
     """Core processing pipeline for a single turn."""
-
-    def _append_agent_note(existing: str, note: str, max_len: int = 1000) -> str:
-        note = (note or "").strip()
-        if not note:
-            return existing
-        # Exact duplicate check
-        if note in existing:
-            return existing
-        # Semantic dedup: skip if first 60 chars of note already appear
-        note_prefix = note[:60]
-        if note_prefix and note_prefix in existing:
-            return existing
-        sep = " " if existing else ""
-        combined = (existing + sep + note).strip()
-        if len(combined) > max_len:
-            combined = combined[:max_len - 3].rsplit(" ", 1)[0] + "..."
-        return combined
 
     db = SessionLocal()
     try:
@@ -247,7 +258,6 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 msg_timestamp = int(stripped)
             else:
                 try:
-                    from datetime import datetime
                     dt = datetime.fromisoformat(stripped.replace("Z", "+00:00"))
                     msg_timestamp = int(dt.timestamp() * 1000)
                 except Exception:
