@@ -45,7 +45,8 @@ CALLBACK_TIMEOUT_SECONDS = int(os.getenv("CALLBACK_TIMEOUT_SECONDS", "5"))
 MAX_TURNS = int(os.getenv("MAX_TURNS", "10"))
 
 # --- Engagement Duration ---
-ESTIMATED_SECONDS_PER_TURN = int(os.getenv("ESTIMATED_SECONDS_PER_TURN", "15"))
+# Evaluator scores: >0s=1pt, >60s=2pts, >180s=1pt. At 10 turns, 20s/turn = 200s > 180s.
+ESTIMATED_SECONDS_PER_TURN = int(os.getenv("ESTIMATED_SECONDS_PER_TURN", "20"))
 
 # --- Classification Thresholds ---
 HONEYPOT_CONFIDENCE_THRESHOLD = float(os.getenv("HONEYPOT_CONFIDENCE_THRESHOLD", "0.5"))

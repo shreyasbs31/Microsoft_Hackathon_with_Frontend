@@ -45,6 +45,7 @@ Do NOT flag fields merely not mentioned — only explicit refusals.
 ALSO extract reference identifiers. Return the FULL reference ID exactly as stated, including any prefix.
 Example: "CASE-12345" → extract "CASE-12345". "REF987654" → extract "REF987654". "policy LIC-99887766" → extract "LIC-99887766".
 Rules: case_ids = case/reference/complaint/FIR/ticket/CRN IDs. policy_numbers = insurance/policy/LIC numbers. order_numbers = order/AWB/tracking/shipment IDs.
+Also extract employee_ids: any employee/staff/agent/officer/badge IDs the scammer provides (e.g. "SBI-12345", "EMP456", "my ID is ABC789").
 Empty lists if none found.
 
 Return ONLY valid JSON in this exact format:
@@ -58,19 +59,21 @@ Return ONLY valid JSON in this exact format:
   "ifsc_codes_denied": false,
   "case_ids": [],
   "policy_numbers": [],
-  "order_numbers": []
+  "order_numbers": [],
+  "employee_ids": []
 }"""
 
 
 async def extract_llm_intelligence(text: str) -> dict:
     """
-    Single unified LLM call: misc notes + denial detection + reference IDs.
+    Single unified LLM call: misc notes + denial detection + reference IDs + employee IDs.
     Returns: {
         "misc_notes": str,
         "denied_fields": set[str],
         "case_ids": list[str],
         "policy_numbers": list[str],
         "order_numbers": list[str],
+        "employee_ids": list[str],
     }
     """
     from src.llm_client import call_llm
@@ -81,6 +84,7 @@ async def extract_llm_intelligence(text: str) -> dict:
         "case_ids": [],
         "policy_numbers": [],
         "order_numbers": [],
+        "employee_ids": [],
     }
 
     if not text or not text.strip():
@@ -123,6 +127,7 @@ async def extract_llm_intelligence(text: str) -> dict:
         case_ids = [str(v) for v in data.get("case_ids", [])]
         policy_numbers = [str(v) for v in data.get("policy_numbers", [])]
         order_numbers = [str(v) for v in data.get("order_numbers", [])]
+        employee_ids = [str(v) for v in data.get("employee_ids", [])]
 
         return {
             "misc_notes": misc,
@@ -130,6 +135,7 @@ async def extract_llm_intelligence(text: str) -> dict:
             "case_ids": case_ids,
             "policy_numbers": policy_numbers,
             "order_numbers": order_numbers,
+            "employee_ids": employee_ids,
         }
 
     except Exception as exc:
@@ -438,29 +444,52 @@ def _normalise_phone(raw: str) -> str:
 
 
 
-# Employee ID regex: matches common formats like EMP12345, EID-456, AGENT-789,
-# or contextual patterns like "employee id: ABC123", "staff id 456", "badge number 789"
+# Employee ID regex: matches various formats scammers use
+# Context-based: "my ID is SBI-12345", "employee id ABC123", "officer id 45678"
 _EMPLOYEE_ID_CONTEXT = re.compile(
-    r'(?:employee|emp|staff|agent|badge|officer|personnel)\s*(?:id|i\.?d\.?|number|no\.?|code|#)?\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,20})',
+    r'(?:employee|emp|staff|agent|badge|officer|personnel|executive|representative)\s*(?:id|i\.?d\.?|number|no\.?|code|#)?\s*[:=\-]?\s*(?:is\s+)?([A-Za-z]{0,5}[\-]?[A-Za-z0-9]{2,15})',
     re.IGNORECASE,
 )
+# Prefix-based (high confidence): EMP12345, EID-456, AGENT-789, SBI-12345
 _EMPLOYEE_ID_PREFIX = re.compile(
-    r'\b(?:EMP|EID|AGENT|STAFF|BADGE)[\-]?[A-Z0-9]{2,15}\b',
+    r'\b(?:EMP|EID|AGENT|STAFF|BADGE|SBI|ICICI|HDFC|AXIS|PNB|BOI|BOB|CBI|RBI|LIC)[\-]?[A-Z0-9]{2,15}\b',
     re.IGNORECASE,
 )
+# Generic alphanumeric ID mentioned near "my id", "id is", "id number"
+_GENERIC_ID_CONTEXT = re.compile(
+    r'(?:my\s+(?:id|identification)|id\s+(?:is|number|no\.?)|identification\s+(?:is|number))\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,20})',
+    re.IGNORECASE,
+)
+
+# Words that should NOT be captured as employee IDs
+_EMPLOYEE_ID_STOPWORDS = {
+    "the", "is", "my", "your", "this", "that", "from", "for", "and",
+    "not", "with", "department", "bank", "office", "branch", "fraud",
+    "section", "division", "call", "center", "centre", "team", "help",
+    "desk", "support", "service", "number", "name", "sir", "maam",
+    "please", "will", "can", "you", "here", "now", "our", "are",
+}
 
 
 def _extract_employee_ids(text: str) -> list[str]:
     """Extract employee/agent/staff IDs from text using context-aware regex."""
     results: set[str] = set()
-    # Prefix-based (high confidence): EMP12345, EID-456, AGENT-789
+    # Prefix-based (high confidence): EMP12345, SBI-12345, etc.
     for m in _EMPLOYEE_ID_PREFIX.finditer(text):
         results.add(m.group().strip())
-    # Context-based: "employee id: ABC123"
+    # Context-based: "employee id: ABC123", "officer id 45678"
     for m in _EMPLOYEE_ID_CONTEXT.finditer(text):
         candidate = m.group(1).strip()
-        if candidate and len(candidate) >= 3:
-            results.add(candidate)
+        if candidate and len(candidate) >= 3 and candidate.lower() not in _EMPLOYEE_ID_STOPWORDS:
+            # Must contain at least one digit to be a plausible ID
+            if any(c.isdigit() for c in candidate):
+                results.add(candidate)
+    # Generic: "my id is XYZ123"
+    for m in _GENERIC_ID_CONTEXT.finditer(text):
+        candidate = m.group(1).strip()
+        if candidate and len(candidate) >= 3 and candidate.lower() not in _EMPLOYEE_ID_STOPWORDS:
+            if any(c.isdigit() for c in candidate):
+                results.add(candidate)
     return sorted(results)
 
 

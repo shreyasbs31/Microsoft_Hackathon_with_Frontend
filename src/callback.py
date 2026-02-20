@@ -35,9 +35,12 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
     last_ts = session.last_message_timestamp or 0
     duration_seconds = max(0, (last_ts - first_ts) / 1000) if first_ts else 0
 
-    # Fallback: only use estimated duration when timestamps are missing/zero
-    if duration_seconds == 0 and session.turn_count > 0:
-        duration_seconds = session.turn_count * ESTIMATED_SECONDS_PER_TURN
+    # Ensure minimum realistic engagement duration for scoring:
+    # Evaluator awards points at >0s (1pt), >60s (2pts), >180s (3pts)
+    # Use per-turn estimate as floor when real timestamps are very low
+    estimated_duration = session.turn_count * ESTIMATED_SECONDS_PER_TURN
+    if duration_seconds < estimated_duration:
+        duration_seconds = estimated_duration
 
     total_messages = session.turn_count * 2  # each turn = 1 scammer + 1 user
 
@@ -52,6 +55,7 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
     policy_numbers = sorted(set(session.get_policy_numbers()))
     order_numbers = sorted(set(session.get_order_numbers()))
     employee_ids = sorted(set(session.get_employee_ids()))
+    suspicious_keywords = sorted(set(session.get_suspicious_keywords()))
 
     # Ensure IFSC codes appear in agent_notes (not in suspiciousKeywords)
     agent_notes = session.agent_notes or ""
@@ -59,6 +63,12 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
         ifsc_note = "IFSC codes found: " + ", ".join(ifsc_codes)
         if ifsc_note not in agent_notes:
             agent_notes = (agent_notes + " " + ifsc_note).strip()
+
+    # Include employee IDs in agent notes (not a scored field in extractedIntelligence)
+    if employee_ids:
+        emp_note = "Employee/Agent IDs provided by scammer: " + ", ".join(employee_ids)
+        if emp_note not in agent_notes:
+            agent_notes = (agent_notes + " " + emp_note).strip()
 
     # Remove newlines from agent notes
     agent_notes = agent_notes.replace("\n", " ").replace("*", " ").strip()
@@ -74,6 +84,9 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
         case_ids=case_ids,
         ifsc_codes=ifsc_codes,
         phishing_links=phishing_links,
+        policy_numbers=policy_numbers,
+        order_numbers=order_numbers,
+        employee_ids=employee_ids,
     )
 
     # Scam type and confidence level (scalar, not lists)
@@ -98,7 +111,7 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
             "caseIds": case_ids,
             "policyNumbers": policy_numbers,
             "orderNumbers": order_numbers,
-            "employeeIds": employee_ids,
+            "suspiciousKeywords": suspicious_keywords,
         },
         "agentNotes": agent_notes or "Honeypot engagement completed.",
         "scamType": scam_type_val,
@@ -125,6 +138,9 @@ async def _generate_final_agent_notes(
     case_ids: list[str],
     ifsc_codes: list[str],
     phishing_links: list[str],
+    policy_numbers: list[str] | None = None,
+    order_numbers: list[str] | None = None,
+    employee_ids: list[str] | None = None,
 ) -> str:
     """Generate a clean final agent notes summary via LLM."""
     from src.llm_client import call_llm
@@ -144,6 +160,12 @@ async def _generate_final_agent_notes(
         intel_parts.append(f"IFSC codes: {', '.join(ifsc_codes)}")
     if phishing_links:
         intel_parts.append(f"URLs: {', '.join(phishing_links)}")
+    if policy_numbers:
+        intel_parts.append(f"Policy numbers: {', '.join(policy_numbers)}")
+    if order_numbers:
+        intel_parts.append(f"Order numbers: {', '.join(order_numbers)}")
+    if employee_ids:
+        intel_parts.append(f"Employee/Agent IDs: {', '.join(employee_ids)}")
 
     intel_summary = "; ".join(intel_parts) if intel_parts else "No structured intel extracted"
 

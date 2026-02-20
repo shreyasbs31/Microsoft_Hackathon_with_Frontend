@@ -219,6 +219,10 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 email_addresses="[]",
                 ifsc_codes="[]",
                 suspicious_keywords="[]",
+                case_ids="[]",
+                policy_numbers="[]",
+                order_numbers="[]",
+                employee_ids="[]",
                 denied_fields="[]",
                 agent_notes="",
             )
@@ -280,7 +284,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
             existing_notes = session.agent_notes or ""
             session.agent_notes = _append_agent_note(existing_notes, hint_note)
 
-        # ---- C4. Merge LLM-extracted reference IDs into new_intel ----
+        # ---- C4. Merge LLM-extracted reference IDs and employee IDs into new_intel ----
         for cid in combined_result.get("case_ids", []):
             if cid and cid not in new_intel.case_ids:
                 new_intel.case_ids.append(cid)
@@ -290,6 +294,9 @@ async def _process_turn(request: HoneypotRequest) -> str:
         for on in combined_result.get("order_numbers", []):
             if on and on not in new_intel.order_numbers:
                 new_intel.order_numbers.append(on)
+        for eid in combined_result.get("employee_ids", []):
+            if eid and eid not in new_intel.employee_ids:
+                new_intel.employee_ids.append(eid)
 
         # ---- D. Merge intel with session data ----
         existing_intel = {

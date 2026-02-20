@@ -26,14 +26,15 @@ class TestUnifiedExtraction(unittest.TestCase):
             "ifsc_codes_denied": False,
             "case_ids": ["CASE-123"],
             "policy_numbers": [],
-            "order_numbers": []
+            "order_numbers": [],
+            "employee_ids": ["SBI-12345"]
         })
 
         with patch("src.llm_client.call_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = mock_resp
 
             # Call the function
-            result = await extract_llm_intelligence("I am from Delhi. My case is CASE-123. I won't give you my phone number or email.")
+            result = await extract_llm_intelligence("I am from Delhi. My case is CASE-123. I won't give you my phone number or email. My ID is SBI-12345.")
 
             # Verify results
             self.assertEqual(result["misc_notes"], "User mentioned being from Delhi.")
@@ -46,6 +47,7 @@ class TestUnifiedExtraction(unittest.TestCase):
             self.assertEqual(result["case_ids"], ["CASE-123"])
             self.assertEqual(result["policy_numbers"], [])
             self.assertEqual(result["order_numbers"], [])
+            self.assertEqual(result["employee_ids"], ["SBI-12345"])
 
     def test_failure(self):
         asyncio.run(self._test_json_failure())
@@ -59,6 +61,7 @@ class TestUnifiedExtraction(unittest.TestCase):
             self.assertEqual(result["case_ids"], [])
             self.assertEqual(result["policy_numbers"], [])
             self.assertEqual(result["order_numbers"], [])
+            self.assertEqual(result["employee_ids"], [])
 
     def test_employee_id_extraction(self):
         """Test that employee IDs are extracted via regex."""
@@ -66,6 +69,20 @@ class TestUnifiedExtraction(unittest.TestCase):
         result = extract_intelligence_regex("My employee ID is EMP12345 and my agent ID is AGENT-789")
         self.assertIn("EMP12345", result.employee_ids)
         self.assertIn("AGENT-789", result.employee_ids)
+
+    def test_employee_id_sbi_format(self):
+        """Test SBI-style employee IDs."""
+        from src.extractor import extract_intelligence_regex
+        result = extract_intelligence_regex("I'm calling from SBI fraud department. My ID is SBI-12345.")
+        self.assertIn("SBI-12345", result.employee_ids)
+
+    def test_employee_id_stopwords(self):
+        """Test that common words are NOT captured as employee IDs."""
+        from src.extractor import extract_intelligence_regex
+        result = extract_intelligence_regex("I am an agent from the department")
+        # Should NOT capture "department" or "from" as employee IDs
+        for eid in result.employee_ids:
+            self.assertNotIn(eid.lower(), ["department", "from", "the"])
 
 if __name__ == "__main__":
     unittest.main()
