@@ -22,7 +22,7 @@ from src.models import HoneypotSession
 logger = logging.getLogger(__name__)
 
 
-def build_callback_payload(session: HoneypotSession) -> dict:
+async def build_callback_payload(session: HoneypotSession) -> dict:
     """
     Build the final callback payload from session state.
 
@@ -65,6 +65,19 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     # Remove newlines from agent notes
     agent_notes = agent_notes.replace("\n", " ").replace("*", " ").strip()
 
+    # --- Generate a clean final summary via LLM ---
+    agent_notes = await _generate_final_agent_notes(
+        raw_notes=agent_notes,
+        scam_type=session.scam_type or "Unknown",
+        phone_numbers=phone_numbers,
+        bank_accounts=bank_accounts,
+        upi_ids=upi_ids,
+        email_addresses=email_addresses,
+        case_ids=case_ids,
+        ifsc_codes=ifsc_codes,
+        phishing_links=phishing_links,
+    )
+
     # Scam type and confidence level (scalar, not lists)
     scam_type_val = session.scam_type or ""
     try:
@@ -95,6 +108,72 @@ def build_callback_payload(session: HoneypotSession) -> dict:
     return payload
 
 
+_AGENT_NOTES_SUMMARY_PROMPT = """\
+You are summarising a honeypot operation that engaged a scammer. Write a concise, professional 2-3 sentence summary.
+
+Include: scam type, key tactics used by the scammer (urgency, threats, impersonation), what identifying intelligence was extracted (phone numbers, emails, reference IDs, etc.), and how the honeypot kept the scammer engaged.
+
+Do NOT use markdown, bullet points, or formatting. Write plain text only. Be specific about the extracted values."""
+
+
+async def _generate_final_agent_notes(
+    raw_notes: str,
+    scam_type: str,
+    phone_numbers: list[str],
+    bank_accounts: list[str],
+    upi_ids: list[str],
+    email_addresses: list[str],
+    case_ids: list[str],
+    ifsc_codes: list[str],
+    phishing_links: list[str],
+) -> str:
+    """Generate a clean final agent notes summary via LLM."""
+    from src.llm_client import call_llm
+
+    intel_parts = []
+    if phone_numbers:
+        intel_parts.append(f"Phone numbers: {', '.join(phone_numbers)}")
+    if bank_accounts:
+        intel_parts.append(f"Bank accounts: {', '.join(bank_accounts)}")
+    if upi_ids:
+        intel_parts.append(f"UPI IDs: {', '.join(upi_ids)}")
+    if email_addresses:
+        intel_parts.append(f"Emails: {', '.join(email_addresses)}")
+    if case_ids:
+        intel_parts.append(f"Case IDs: {', '.join(case_ids)}")
+    if ifsc_codes:
+        intel_parts.append(f"IFSC codes: {', '.join(ifsc_codes)}")
+    if phishing_links:
+        intel_parts.append(f"URLs: {', '.join(phishing_links)}")
+
+    intel_summary = "; ".join(intel_parts) if intel_parts else "No structured intel extracted"
+
+    user_prompt = (
+        f"Scam type: {scam_type}\n"
+        f"Extracted intelligence: {intel_summary}\n"
+        f"Raw session notes: {raw_notes}\n\n"
+        f"Write the summary:"
+    )
+
+    try:
+        result = await call_llm(
+            role="extractor",
+            system_prompt=_AGENT_NOTES_SUMMARY_PROMPT,
+            user_prompt=user_prompt,
+            json_mode=False,
+        )
+        result = result.strip()
+        if result:
+            # Clean up any accidental formatting
+            result = result.replace("\n", " ").replace("*", " ").strip()
+            return result
+    except Exception as exc:
+        logger.warning("LLM agent notes summary failed: %s — using raw notes", exc)
+
+    # Fallback: return cleaned raw notes
+    return raw_notes or "Honeypot engagement completed."
+
+
 async def fire_callbacks(session: HoneypotSession) -> bool:
     """
     Send the final intelligence payload to BOTH GUVI callback endpoints
@@ -102,7 +181,7 @@ async def fire_callbacks(session: HoneypotSession) -> bool:
 
     Returns True if at least one callback succeeded.
     """
-    payload = build_callback_payload(session)
+    payload = await build_callback_payload(session)
 
     logger.info(
         "Firing callbacks for session %s (turn %d)",

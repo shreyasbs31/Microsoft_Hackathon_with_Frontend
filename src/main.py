@@ -320,39 +320,6 @@ async def _process_turn(request: HoneypotRequest) -> str:
         session.set_policy_numbers(merged_intel["policy_numbers"])
         session.set_order_numbers(merged_intel["order_numbers"])
 
-        # ---- I0. Fire callback when we've just processed the 19th scammer message
-        try:
-            conversation_history = request.conversationHistory or []
-            scammer_count = sum(
-                1 for m in conversation_history if (m.get("sender") or "").lower() == "scammer"
-            )
-            if (request.message and (request.message.sender or "").lower() == "scammer"):
-                scammer_count += 1
-        except Exception:
-            scammer_count = 0
-
-        # Trigger only when this is exactly the 19th scammer message (after extraction)
-        # Guard: check final_callback_sent FIRST so we never double-fire
-        if (
-            not session.final_callback_sent
-            and scammer_count == 19
-            and (request.message.sender or "").lower() == "scammer"
-        ):
-            logger.info("19th scammer message reached — firing interim final callbacks")
-            # Set flag BEFORE firing to prevent the turn-10 block from re-triggering
-            session.final_callback_sent = True
-            try:
-                success = await fire_callbacks(session)
-                db.commit()
-                if success:
-                    logger.info("Callbacks sent successfully for session %s (19th message)", session.session_id)
-                else:
-                    logger.warning("One or more callbacks failed for session %s (19th message)", session.session_id)
-            except Exception as exc:
-                # Reset flag if the callback itself failed
-                session.final_callback_sent = False
-                logger.error("Callback error for session %s at 19th message: %s", session.session_id, exc)
-
         # ---- E. Conditional translation ----
         analysis_text = normalised_text
         language = session.language or "English"

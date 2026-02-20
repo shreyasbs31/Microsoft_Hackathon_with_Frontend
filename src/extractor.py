@@ -67,8 +67,8 @@ async def extract_misc_notes(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 _REFERENCE_IDS_SYSTEM_PROMPT = """\
-Extract reference identifiers from scammer message. Return ONLY the numeric/alphanumeric ID values, NOT the label prefix.
-Example: if message says "CASE-12345" → extract "12345". If "REF987654" → extract "987654". If "policy LIC-99887766" → extract "99887766".
+Extract reference identifiers from scammer message. Return the FULL reference ID exactly as stated, including any prefix.
+Example: if message says "CASE-12345" → extract "CASE-12345". If "REF987654" → extract "REF987654". If "policy LIC-99887766" → extract "LIC-99887766". If just "12345" with no prefix → extract "12345".
 
 Return ONLY valid JSON:
 {"case_ids":[],"policy_numbers":[],"order_numbers":[]}
