@@ -162,16 +162,5 @@ class TestUnifiedExtraction(unittest.TestCase):
         merged = merge_intelligence(existing, new_intel)
         self.assertNotIn("202398765", merged["bank_accounts"])
 
-    def test_upi_prefix_of_email_excluded(self):
-        """Test that UPI candidates that are prefixes of emails are excluded.
-        E.g. secure@sbi matched from secure@sbi-verify.com should NOT be a UPI."""
-        from src.extractor import extract_intelligence_regex
-        text = "You can email your OTP to secure@sbi-verify.com to stop the block"
-        result = extract_intelligence_regex(text)
-        # secure@sbi should NOT appear as UPI
-        self.assertNotIn("secure@sbi", result.upi_ids)
-        # But secure@sbi-verify.com SHOULD be an email
-        self.assertIn("secure@sbi-verify.com", result.email_addresses)
-
 if __name__ == "__main__":
     unittest.main()

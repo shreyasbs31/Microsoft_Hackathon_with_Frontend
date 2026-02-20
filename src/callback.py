@@ -56,6 +56,12 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
         if ifsc_note not in agent_notes:
             agent_notes = (agent_notes + " " + ifsc_note).strip()
 
+    # Include employee IDs in agent notes (not a scored field in extractedIntelligence)
+    if employee_ids:
+        emp_note = "Employee/Agent IDs provided by scammer: " + ", ".join(employee_ids)
+        if emp_note not in agent_notes:
+            agent_notes = (agent_notes + " " + emp_note).strip()
+
     # Remove newlines from agent notes
     agent_notes = agent_notes.replace("\n", " ").replace("*", " ").strip()
 
@@ -72,6 +78,7 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
         phishing_links=phishing_links,
         policy_numbers=policy_numbers,
         order_numbers=order_numbers,
+        employee_ids=employee_ids,
     )
 
     # Scam type — default to "unknown" so field is truthy (1pt for structure)
@@ -87,8 +94,8 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
         "status": "success",
         "sessionId": session.session_id,
         "scamDetected": True,  # Always true at callback time
-        "scamType": scam_type_val,
-        "confidenceLevel": confidence_val,
+        "totalMessagesExchanged": total_messages,
+        "engagementDurationSeconds": round(duration_seconds, 2),
         "extractedIntelligence": {
             "phoneNumbers": phone_numbers,
             "bankAccounts": bank_accounts,
@@ -101,13 +108,9 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
             "orderNumbers": order_numbers,
             "suspiciousKeywords": suspicious_keywords,
         },
-        "engagementMetrics": {
-            "totalMessagesExchanged": total_messages,
-            "engagementDurationSeconds": round(duration_seconds, 2),
-        },
-        "totalMessagesExchanged": total_messages,
-        "engagementDurationSeconds": round(duration_seconds, 2),
         "agentNotes": agent_notes or "Honeypot engagement completed.",
+        "scamType": scam_type_val,
+        "confidenceLevel": confidence_val,
     }
     return payload
 
@@ -115,9 +118,8 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
 _AGENT_NOTES_SUMMARY_PROMPT = """\
 You are summarising a honeypot operation that engaged a scammer. Write a concise, professional 2-3 sentence summary.
 
-Include: scam type, key tactics used by the scammer (urgency, threats, impersonation), what identifying intelligence was extracted (phone numbers, bank accounts, UPI IDs, emails, case IDs, IFSC codes, URLs, policy numbers, order numbers), and how the honeypot kept the scammer engaged.
+Include: scam type, key tactics used by the scammer (urgency, threats, impersonation), what identifying intelligence was extracted (phone numbers, emails, reference IDs, etc.), and how the honeypot kept the scammer engaged.
 
-Do NOT mention employee IDs, agent codes, badge numbers, or staff numbers in the summary — these are not scored fields.
 Do NOT use markdown, bullet points, or formatting. Write plain text only. Be specific about the extracted values."""
 
 
@@ -133,6 +135,7 @@ async def _generate_final_agent_notes(
     phishing_links: list[str],
     policy_numbers: list[str] | None = None,
     order_numbers: list[str] | None = None,
+    employee_ids: list[str] | None = None,
 ) -> str:
     """Generate a clean final agent notes summary via LLM."""
     from src.llm_client import call_llm
@@ -156,8 +159,8 @@ async def _generate_final_agent_notes(
         intel_parts.append(f"Policy numbers: {', '.join(policy_numbers)}")
     if order_numbers:
         intel_parts.append(f"Order numbers: {', '.join(order_numbers)}")
-    # Intentionally omit employee IDs from summary — not a scored field
-    # and including them causes the LLM to hallucinate them from URL domains
+    if employee_ids:
+        intel_parts.append(f"Employee/Agent IDs: {', '.join(employee_ids)}")
 
     intel_summary = "; ".join(intel_parts) if intel_parts else "No structured intel extracted"
 
