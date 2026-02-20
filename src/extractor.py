@@ -33,33 +33,75 @@ class ExtractedIntelligence:
 # LLM-based misc-notes extraction
 # ---------------------------------------------------------------------------
 
-_MISC_NOTES_SYSTEM_PROMPT = """\
+_MISC_AND_DENIALS_SYSTEM_PROMPT = """\
 Extract contextual intel from scammer message. Ignore phones/accounts/UPI/URLs/emails/IFSC/keywords (handled separately).
 Focus: names, orgs, addresses, apps, reference IDs, threats, impersonated entities.
-Max 2 sentences. If nothing noteworthy: NONE"""
+Max 2 sentences. If nothing noteworthy: NONE
 
+ALSO flag fields the scammer EXPLICITLY refuses to provide (says cannot/will not/do not).
+Do NOT flag fields merely not mentioned — only explicit refusals.
 
-async def extract_misc_notes(text: str) -> str:
+Return ONLY valid JSON in this exact format:
+{
+  "misc_notes": "...",
+  "phone_numbers_denied": false,
+  "bank_accounts_denied": false,
+  "upi_ids_denied": false,
+  "urls_denied": false,
+  "email_addresses_denied": false,
+  "ifsc_codes_denied": false
+}"""
+
+async def extract_and_detect_denials(text: str) -> dict:
     """
-    Call the LLM to extract miscellaneous contextual intelligence.
-    Returns a short summary string, or empty string on failure / nothing found.
+    Combined LLM call: misc notes + denial detection in one request.
+    Returns: {"misc_notes": str, "denied_fields": set[str]}
     """
     from src.llm_client import call_llm
+    
+    empty_result = {"misc_notes": "", "denied_fields": set()}
+    
+    if not text or not text.strip():
+        return empty_result
 
     try:
         raw = await call_llm(
             role="extractor",
-            system_prompt=_MISC_NOTES_SYSTEM_PROMPT,
+            system_prompt=_MISC_AND_DENIALS_SYSTEM_PROMPT,
             user_prompt=f"Analyse this scammer message:\n\n{text}",
-            json_mode=False,
+            json_mode=True,
         )
         raw = raw.strip()
-        if raw.upper() == "NONE" or not raw:
-            return ""
-        return raw
+        data = dict(json.loads(raw))
+        
+        # Process misc notes
+        misc = data.get("misc_notes", "").strip()
+        if misc.upper() == "NONE":
+            misc = ""
+            
+        # Extract denials
+        _key_map = {
+            "phone_numbers_denied": "phone_numbers",
+            "bank_accounts_denied": "bank_accounts",
+            "upi_ids_denied": "upi_ids",
+            "urls_denied": "urls",
+            "email_addresses_denied": "email_addresses",
+            "ifsc_codes_denied": "ifsc_codes",
+        }
+
+        denied: set[str] = set()
+        for json_key, intel_key in _key_map.items():
+            if data.get(json_key, False) is True:
+                denied.add(intel_key)
+
+        if denied:
+            logger.info("LLM denial detection flagged: %s", denied)
+            
+        return {"misc_notes": misc, "denied_fields": denied}
+
     except Exception as exc:
-        logger.warning("LLM misc-notes extraction failed: %s", exc)
-        return ""
+        logger.warning("LLM combined extraction failed: %s", exc)
+        return empty_result
 
 
 # ---------------------------------------------------------------------------
@@ -379,62 +421,8 @@ def detect_single_value_confirmations(text: str) -> set[str]:
     return confirmed
 
 
-# ---------------------------------------------------------------------------
-# LLM-based denial detection
-# ---------------------------------------------------------------------------
-
-_DENIAL_DETECTION_SYSTEM_PROMPT = """\
-Flag fields the scammer EXPLICITLY refuses to provide (says cannot/will not/do not).
-Do NOT flag fields merely not mentioned — only explicit refusals.
-
-Return ONLY JSON:
-{"phone_numbers_denied":false,"bank_accounts_denied":false,"upi_ids_denied":false,"urls_denied":false,"email_addresses_denied":false,"ifsc_codes_denied":false}"""
-
-
-async def detect_denials_llm(text: str) -> set[str]:
-    """Use the LLM to detect which intel fields the scammer explicitly refuses to provide.
-
-    Returns a set of intel key names (e.g. {"email_addresses", "upi_ids"}) that the
-    scammer denied.  Falls back to an empty set on any failure so the pipeline is
-    never blocked.
-    """
-    from src.llm_client import call_llm
-
-    if not text or not text.strip():
-        return set()
-
-    try:
-        raw = await call_llm(
-            role="extractor",
-            system_prompt=_DENIAL_DETECTION_SYSTEM_PROMPT,
-            user_prompt=f"Analyse this scammer message for explicit denials:\n\n{text}",
-            json_mode=True,
-        )
-        raw = raw.strip()
-        data = json.loads(raw)
-
-        # Map JSON keys back to intel field names
-        _key_map = {
-            "phone_numbers_denied": "phone_numbers",
-            "bank_accounts_denied": "bank_accounts",
-            "upi_ids_denied": "upi_ids",
-            "urls_denied": "urls",
-            "email_addresses_denied": "email_addresses",
-            "ifsc_codes_denied": "ifsc_codes",
-        }
-
-        denied: set[str] = set()
-        for json_key, intel_key in _key_map.items():
-            if data.get(json_key, False) is True:
-                denied.add(intel_key)
-
-        if denied:
-            logger.info("LLM denial detection flagged: %s", denied)
-        return denied
-
-    except Exception as exc:
-        logger.warning("LLM denial detection failed (non-fatal): %s", exc)
-        return set()
+# Old single-purpose LLM denial detection removed to avoid redundancy;
+# logic is now merged into extract_and_detect_denials.
 
 
 def normalise_text(text: str) -> str:

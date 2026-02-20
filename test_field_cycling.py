@@ -107,10 +107,10 @@ def test_field_exhaustion_after_max_asks():
 
     state = {"initial_cycle_complete": True}
 
-    # With 6 fields cycling round-robin, we need at least
-    # 6 fields × MAX_ASKS iterations for the first field to pass threshold
+    # With 9 fields cycling round-robin...
+    # 9 fields × MAX_ASKS iterations for the first field to pass threshold
     # plus extra iterations for the exhaustion check to trigger on next pass
-    total_iterations = 6 * (_MAX_ASKS_BEFORE_EXHAUST) + 1
+    total_iterations = 9 * (_MAX_ASKS_BEFORE_EXHAUST) + 1
     for i in range(total_iterations):
         instructions, state = _build_priority_instructions(counts, state)
 

@@ -87,6 +87,7 @@ class HoneypotSession(Base):
     policy_numbers = Column(Text, default="[]")
     order_numbers = Column(Text, default="[]")
     suspicious_keywords = Column(Text, default="[]")
+    denied_fields = Column(Text, default="[]")
 
     # Platform metadata
     channel = Column(String(50), nullable=True)
@@ -169,6 +170,12 @@ class HoneypotSession(Base):
 
     def set_suspicious_keywords(self, v: list):
         self._set_json_list("suspicious_keywords", v)
+
+    def get_denied_fields(self) -> list:
+        return self._get_json_list("denied_fields")
+
+    def set_denied_fields(self, v: list):
+        self._set_json_list("denied_fields", v)
 
     def get_case_ids(self) -> list:
         return self._get_json_list("case_ids")

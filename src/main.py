@@ -27,13 +27,11 @@ from src.models import (
 from src.session_lock import session_lock_manager
 from src.extractor import (
     extract_intelligence_regex,
-    extract_misc_notes,
+    extract_and_detect_denials,
     merge_intelligence,
     normalise_text,
     detect_denials,
     adjust_counts_for_denials,
-    detect_denials_llm,
-    detect_single_value_confirmations,
     has_reference_hints,
     extract_reference_ids,
     extract_invalid_ifsc_hints,
@@ -223,6 +221,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
                 email_addresses="[]",
                 ifsc_codes="[]",
                 suspicious_keywords="[]",
+                denied_fields="[]",
                 agent_notes="",
             )
             db.add(session)
@@ -261,8 +260,11 @@ async def _process_turn(request: HoneypotRequest) -> str:
         # ---- C. Regex extraction for structured fields ----
         new_intel = extract_intelligence_regex(normalised_text)
 
-        # ---- C2. LLM extraction for misc contextual notes ----
-        misc_notes = await extract_misc_notes(normalised_text)
+        # ---- C2. LLM extraction for misc contextual notes and denials ----
+        combined_result = await extract_and_detect_denials(normalised_text)
+        misc_notes = combined_result.get("misc_notes", "")
+        llm_denied = combined_result.get("denied_fields", set())
+
         if misc_notes:
             existing_notes = session.agent_notes or ""
             session.agent_notes = _append_agent_note(existing_notes, misc_notes)
@@ -360,16 +362,13 @@ async def _process_turn(request: HoneypotRequest) -> str:
             denied_fields: set[str] = set()
             single_value_fields: set[str] = set()
 
-            # Check the translated/current message with regex
+            # Load previously persisted denials
+            persisted_denials = set(session.get_denied_fields())
+            
+            # Check the translated/current message with regex and LLM
             denied_fields |= detect_denials(analysis_text)
-            # Check for single-value confirmations ("that's the only number I have")
-            single_value_fields |= detect_single_value_confirmations(analysis_text)
-
-            # LLM-based denial detection — complements regex by catching
-            # natural phrasing the regex misses (may find denials for
-            # different fields than what regex caught)
-            llm_denied = await detect_denials_llm(analysis_text)
             denied_fields |= llm_denied
+            single_value_fields |= detect_single_value_confirmations(analysis_text)
 
             # Also scan the last few scammer messages from the conversation history
             try:
@@ -382,10 +381,15 @@ async def _process_turn(request: HoneypotRequest) -> str:
             except Exception:
                 pass
 
-            if denied_fields:
-                # Persist a short agent note about the denial for auditing
+            # Update session denials
+            all_denials = persisted_denials | denied_fields
+            session.set_denied_fields(sorted(all_denials))
+
+            # Only log NEW denials that weren't already persisted
+            new_denials = denied_fields - persisted_denials
+            if new_denials:
                 existing_notes = session.agent_notes or ""
-                denial_readable = ", ".join(sorted(denied_fields))
+                denial_readable = ", ".join(sorted(new_denials))
                 session.agent_notes = _append_agent_note(existing_notes, f"Scammer denied sharing: {denial_readable}")
 
             if single_value_fields:
@@ -396,12 +400,13 @@ async def _process_turn(request: HoneypotRequest) -> str:
             # Feed denials and single-value confirmations into cycling exhaustion
             agent_state = session.get_agent_state()
             exhausted = set(agent_state.get("exhausted_fields", []))
-            exhausted |= denied_fields
+            # Critical Fix: include past denials as well
+            exhausted |= all_denials
             exhausted |= single_value_fields
             agent_state["exhausted_fields"] = sorted(exhausted)
             session.set_agent_state(agent_state)
 
-            adjusted_counts = adjust_counts_for_denials(session.intel_counts(), denied_fields | single_value_fields)
+            adjusted_counts = adjust_counts_for_denials(session.intel_counts(), exhausted)
 
             reply, approach_summary, updated_agent_state = await generate_response(
                 current_message=analysis_text,
