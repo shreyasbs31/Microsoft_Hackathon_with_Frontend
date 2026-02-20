@@ -373,6 +373,11 @@ def extract_intelligence_regex(text: str) -> ExtractedIntelligence:
             # CRITICAL FIX: If this match was already caught as an email, skip it
             if cl in email_set_lower:
                 continue
+
+            # If this UPI candidate is a prefix of any extracted email, skip it
+            # e.g. secure@sbi matched from secure@sbi-verify.com
+            if any(email.startswith(cl) for email in email_set_lower):
+                continue
                 
             # Context check: if "email" is mentioned nearby, skip it
             start = max(0, m.start() - 40)
