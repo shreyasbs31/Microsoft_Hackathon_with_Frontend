@@ -16,7 +16,6 @@ from src.config import (
     GUVI_CALLBACK_URL_1,
     GUVI_CALLBACK_URL_2,
     CALLBACK_TIMEOUT_SECONDS,
-    ESTIMATED_SECONDS_PER_TURN,
 )
 from src.models import HoneypotSession
 
@@ -30,17 +29,10 @@ async def build_callback_payload(session: HoneypotSession) -> dict:
     At turn 10, force scamDetected=True regardless of internal status
     (the evaluator only sends scam scenarios).
     """
-    # Calculate engagement duration
+    # Engagement duration = difference between first and last scammer message timestamps
     first_ts = session.first_message_timestamp or 0
     last_ts = session.last_message_timestamp or 0
     duration_seconds = max(0, (last_ts - first_ts) / 1000) if first_ts else 0
-
-    # Ensure minimum realistic engagement duration for scoring:
-    # Evaluator awards points at >0s (1pt), >60s (2pts), >180s (3pts)
-    # Use per-turn estimate as floor when real timestamps are very low
-    estimated_duration = session.turn_count * ESTIMATED_SECONDS_PER_TURN
-    if duration_seconds < estimated_duration:
-        duration_seconds = estimated_duration
 
     total_messages = session.turn_count * 2  # each turn = 1 scammer + 1 user
 
