@@ -35,6 +35,7 @@ from src.extractor import (
     has_reference_hints,
     extract_reference_ids,
     extract_invalid_ifsc_hints,
+    detect_single_value_confirmations,
 )
 from src.analyst import analyse_message
 from src.persona import generate_response
@@ -356,6 +357,7 @@ async def _process_turn(request: HoneypotRequest) -> str:
         # ---- G. Generate persona response ----
         agent_state = session.get_agent_state()
         last_approach = agent_state.get("last_approach", "")
+        updated_agent_state = agent_state.copy()
 
         try:
             # Detect explicit denials in recent scammer messages and current text
