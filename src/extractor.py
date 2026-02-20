@@ -46,6 +46,7 @@ ALSO extract reference identifiers. Return the FULL reference ID exactly as stat
 Example: "CASE-12345" → extract "CASE-12345". "REF987654" → extract "REF987654". "policy LIC-99887766" → extract "LIC-99887766".
 Rules: case_ids = case/reference/complaint/FIR/ticket/CRN IDs. policy_numbers = insurance/policy/LIC numbers. order_numbers = order/AWB/tracking/shipment IDs.
 Also extract employee_ids: any employee/staff/agent/officer/badge IDs the scammer provides (e.g. "SBI-12345", "EMP456", "my ID is ABC789").
+Do NOT put IFSC codes (format: 4 letters + 0 + 6 alphanumeric, e.g. SBIN0001234), case IDs, policy numbers, or order numbers in employee_ids. Only actual personnel identifiers.
 Empty lists if none found.
 
 Return ONLY valid JSON in this exact format:
@@ -450,14 +451,17 @@ _EMPLOYEE_ID_CONTEXT = re.compile(
     r'(?:employee|emp|staff|agent|badge|officer|personnel|executive|representative)\s*(?:id|i\.?d\.?|number|no\.?|code|#)?\s*[:=\-]?\s*(?:is\s+)?([A-Za-z]{0,5}[\-]?[A-Za-z0-9]{2,15})',
     re.IGNORECASE,
 )
-# Prefix-based (high confidence): EMP12345, EID-456, AGENT-789, SBI-12345
+# Prefix-based (high confidence): EMP12345, EID-456, AGENT-789
+# Bank abbreviations (SBI, ICICI, etc.) require a hyphen to avoid matching IFSC codes
 _EMPLOYEE_ID_PREFIX = re.compile(
-    r'\b(?:EMP|EID|AGENT|STAFF|BADGE|SBI|ICICI|HDFC|AXIS|PNB|BOI|BOB|CBI|RBI|LIC)[\-]?[A-Z0-9]{2,15}\b',
+    r'\b(?:EMP|EID|AGENT|STAFF|BADGE)[\-]?[A-Z0-9]{2,15}\b'
+    r'|\b(?:SBI|ICICI|HDFC|AXIS|PNB|BOI|BOB|CBI|RBI|LIC)\-[A-Z0-9]{2,15}\b',
     re.IGNORECASE,
 )
-# Generic alphanumeric ID mentioned near "my id", "id is", "id number"
+# Generic alphanumeric ID mentioned near "my id" / "my identification" only
+# Narrowed to avoid capturing case/reference IDs from "case id is ..." contexts
 _GENERIC_ID_CONTEXT = re.compile(
-    r'(?:my\s+(?:id|identification)|id\s+(?:is|number|no\.?)|identification\s+(?:is|number))\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,20})',
+    r'(?:my\s+(?:id|identification)\s*(?:is|number|no\.?|code)?)\s*[:=\-]?\s*([A-Za-z0-9][A-Za-z0-9\-]{2,20})',
     re.IGNORECASE,
 )
 
@@ -490,6 +494,11 @@ def _extract_employee_ids(text: str) -> list[str]:
         if candidate and len(candidate) >= 3 and candidate.lower() not in _EMPLOYEE_ID_STOPWORDS:
             if any(c.isdigit() for c in candidate):
                 results.add(candidate)
+
+    # Cross-deconflict: remove anything that matches IFSC code format
+    _ifsc_dedup = re.compile(r'^[A-Z]{4}0[A-Z0-9]{6}$', re.IGNORECASE)
+    results = {r for r in results if not _ifsc_dedup.match(r)}
+
     return sorted(results)
 
 

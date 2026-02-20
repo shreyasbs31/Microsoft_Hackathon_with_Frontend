@@ -78,6 +78,7 @@ _GEMINI_MODEL_FALLBACKS: dict[Role, list[str]] = {
     ],
     "extractor": [
         GEMINI_EXTRACTOR_MODEL,
+        "gemini-2.5-flash",
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
         "gemini-1.5-flash",

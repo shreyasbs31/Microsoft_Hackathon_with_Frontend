@@ -352,10 +352,14 @@ async def _process_turn(request: HoneypotRequest) -> str:
 
             if analysis.status == "HONEYPOT":
                 session.status = SessionStatus.HONEYPOT
-                session.scam_type = analysis.scam_type
-                session.confidence_level = str(analysis.confidence)
             elif analysis.status == "LEGIT":
                 session.status = SessionStatus.LEGIT
+
+            # Always persist scam_type and confidence (scored fields in structure)
+            if analysis.scam_type and not session.scam_type:
+                session.scam_type = analysis.scam_type
+            if analysis.confidence > 0:
+                session.confidence_level = str(analysis.confidence)
 
             # Append analyst reasoning to agent notes
             if analysis.reasoning:

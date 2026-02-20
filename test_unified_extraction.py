@@ -84,5 +84,19 @@ class TestUnifiedExtraction(unittest.TestCase):
         for eid in result.employee_ids:
             self.assertNotIn(eid.lower(), ["department", "from", "the"])
 
+    def test_ifsc_not_captured_as_employee_id(self):
+        """Test that IFSC codes like SBIN0001234 are NOT captured as employee IDs."""
+        from src.extractor import extract_intelligence_regex
+        result = extract_intelligence_regex("The IFSC for your branch is SBIN0001234")
+        self.assertNotIn("SBIN0001234", result.employee_ids)
+        # But it SHOULD be captured as IFSC
+        self.assertIn("SBIN0001234", result.ifsc_codes)
+
+    def test_case_id_not_captured_as_employee_id(self):
+        """Test that case IDs are NOT captured as employee IDs via generic id context."""
+        from src.extractor import extract_intelligence_regex
+        result = extract_intelligence_regex("Your case ID is 2023-4567. Please proceed.")
+        self.assertNotIn("2023-4567", result.employee_ids)
+
 if __name__ == "__main__":
     unittest.main()
