@@ -212,10 +212,21 @@ async def fire_callbacks(session: HoneypotSession) -> bool:
     session.set_callback_payload(payload)
     session.final_callback_sent = True
 
-    # Skip external HTTP calls for frontend sessions
-    if session.channel == "web-frontend":
+    # Skip external HTTP calls for frontend sessions.
+    # channel is not a DB column — check the metadata JSON stored in the session.
+    session_channel = getattr(session, "channel", None)
+    if session_channel is None:
+        # Try reading from the stored metadata JSON if available
+        try:
+            meta = json.loads(session.metadata_json or "{}") if hasattr(session, "metadata_json") else {}
+            session_channel = meta.get("channel", "")
+        except Exception:
+            session_channel = ""
+
+    if session_channel == "web-frontend":
         logger.info("Frontend session — skipping external GUVI callbacks")
         return True
+
 
     async with httpx.AsyncClient(timeout=CALLBACK_TIMEOUT_SECONDS) as client:
         results = await asyncio.gather(
