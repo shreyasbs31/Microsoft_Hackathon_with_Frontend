@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🍯 Honeypot Scam Detection System</title>
+    <meta name="description" content="AI-powered honeypot system that detects scam messages, engages scammers, and extracts actionable intelligence.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <!-- Top Bar -->
+    <header class="top-bar">
+        <div class="top-bar-left">
+            <button class="btn-scripts-toggle" id="btn-scripts-toggle" title="Toggle Scammer Scripts Panel">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                Scripts
+            </button>
+            <div class="logo">
+                <span class="logo-icon">🍯</span>
+                <div class="logo-text">
+                    <h1>Honeypot</h1>
+                    <span class="logo-subtitle">Scam Detection System</span>
+                </div>
+            </div>
+        </div>
+        <div class="top-bar-center">
+            <div class="session-id-display" id="session-id-display" title="Click to copy session ID">
+                <span class="session-label">Session</span>
+                <span class="session-value" id="session-id-value">—</span>
+            </div>
+        </div>
+        <div class="top-bar-right">
+            <button class="btn btn-outline" id="btn-new-session">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                New Session
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+
+        <!-- Scammer Scripts Drawer (left) -->
+        <aside class="scripts-drawer" id="scripts-drawer">
+            <div class="scripts-header">
+                <div class="scripts-header-title">
+                    <span>🎭</span>
+                    <span>Scammer Scripts</span>
+                </div>
+                <p class="scripts-subtitle">Click any message to load it into the chat. Work through the turns in order for a complete 10-turn session.</p>
+            </div>
+
+            <div class="scripts-tabs" id="scripts-tabs">
+                <!-- Tabs injected by app.js -->
+            </div>
+
+            <div class="scripts-messages" id="scripts-messages">
+                <!-- Messages injected by app.js -->
+            </div>
+
+            <div class="scripts-footer">
+                <div class="scripts-progress-info" id="scripts-progress-info">
+                    Turn <span id="script-current-turn">0</span> / <span id="script-total-turns">10</span>
+                </div>
+                <button class="btn-next-turn" id="btn-next-turn" disabled>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    Load Next Turn
+                </button>
+            </div>
+        </aside>
+
+        <!-- Chat Panel -->
+        <section class="chat-panel" id="chat-panel">
+            <div class="chat-header">
+                <div class="chat-header-left">
+                    <div class="chat-avatar">
+                        <span>🤖</span>
+                        <span class="avatar-status-dot active"></span>
+                    </div>
+                    <div class="chat-header-info">
+                        <h2>AI Honeypot Agent</h2>
+                        <span class="chat-status" id="chat-status">Online • Ready to engage</span>
+                    </div>
+                </div>
+                <div class="chat-header-right">
+                    <div class="turn-counter" id="turn-counter">
+                        <span class="turn-label">Turn</span>
+                        <span class="turn-value" id="turn-value">0</span>
+                        <span class="turn-sep">/</span>
+                        <span class="turn-max" id="turn-max">10</span>
+                    </div>
+                    <div class="turn-progress-bar">
+                        <div class="turn-progress-fill" id="turn-progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <div class="welcome-message">
+                    <div class="welcome-icon">🕵️</div>
+                    <h3>Welcome to the Honeypot</h3>
+                    <p>You are role-playing as a <strong>scammer</strong>. Send scam messages and watch the AI agent extract your intelligence in real time.</p>
+                    <div class="welcome-cta-strip">
+                        <div class="cta-item">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
+                            <span>Use the <strong>Scripts</strong> panel on the left for pre-written scam messages</span>
+                        </div>
+                        <div class="cta-item cta-highlight">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            <span>After <strong>10 turns</strong>, unlock the full intelligence report!</span>
+                        </div>
+                    </div>
+                    <div class="welcome-quick-starts">
+                        <span class="example-label">Quick-start examples:</span>
+                        <button class="example-btn" data-message="URGENT: Your SBI account has been compromised. Your account will be blocked in 2 hours. Share your account number and OTP immediately to verify your identity.">🏦 Bank Fraud</button>
+                        <button class="example-btn" data-message="URGENT: Your Aadhaar eKYC has expired. Your bank account will be BLOCKED in 24 hours. Call us immediately at +91-8876543210 to re-verify.">📋 KYC Fraud</button>
+                        <button class="example-btn" data-message="CONGRATULATIONS! You have won Rs 50,00,000 in the National Digital India Lottery 2024! Ticket number LT-2024-77654. Call now at +91-9988776655 to claim.">🎰 Lottery Fraud</button>
+                        <button class="example-btn" data-message="URGENT LEGAL NOTICE: Income Tax Department. A tax evasion FIR number ITD-2024-CR-55321 has been registered against your PAN. Call immediately: +91-9911223344.">📝 Tax Fraud</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 10-turn results teaser (shown after turn 5) -->
+            <div class="results-teaser" id="results-teaser" style="display:none;">
+                <span class="teaser-icon">🏁</span>
+                <span class="teaser-text"><strong>Almost there!</strong> Complete your 10-turn conversation to unlock the full intelligence report.</span>
+            </div>
+
+            <div class="typing-indicator" id="typing-indicator">
+                <div class="typing-dots"><span></span><span></span><span></span></div>
+                <span class="typing-text">AI is crafting a response...</span>
+            </div>
+
+            <form class="chat-input-area" id="chat-form">
+                <div class="input-wrapper">
+                    <textarea id="chat-input" placeholder="Type your scammer message, or use the Scripts panel on the left →" rows="1" maxlength="2000" autofocus></textarea>
+                    <button type="submit" class="btn-send" id="btn-send" title="Send message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                    </button>
+                </div>
+                <div class="input-footer">
+                    <span class="char-count" id="char-count">0 / 2000</span>
+                    <span class="input-hint">Enter to send • Shift+Enter for new line</span>
+                </div>
+            </form>
+        </section>
+
+        <!-- Intelligence Dashboard (right) -->
+        <aside class="intel-panel" id="intel-panel">
+            <div class="intel-header">
+                <h2>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+                    Intelligence Dashboard
+                </h2>
+            </div>
+
+            <!-- 10-turn results notice — always visible -->
+            <div class="ten-turn-notice">
+                <div class="ten-turn-icon">🏆</div>
+                <div class="ten-turn-content">
+                    <strong>Complete 10 turns</strong> to unlock the full intelligence report with all extracted data, scam analysis, and agent notes.
+                </div>
+            </div>
+
+            <div class="intel-content" id="intel-content">
+                <div class="intel-card status-card">
+                    <div class="intel-card-header">
+                        <span class="intel-card-icon">🎯</span>
+                        <span class="intel-card-title">Detection Status</span>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="status-label">Classification</span>
+                            <span class="status-badge" id="status-badge">NEUTRAL</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Scam Type</span>
+                            <span class="status-value" id="scam-type">—</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Confidence</span>
+                            <span class="status-value" id="confidence-level">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="intel-card">
+                    <div class="intel-card-header">
+                        <span class="intel-card-icon">📡</span>
+                        <span class="intel-card-title">Extracted Intelligence</span>
+                    </div>
+                    <div class="intel-fields" id="intel-fields">
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📱</span><span class="field-name">Phone Numbers</span><span class="field-count" id="count-phoneNumbers">0</span></div><div class="field-values" id="values-phoneNumbers"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🏦</span><span class="field-name">Bank Accounts</span><span class="field-count" id="count-bankAccounts">0</span></div><div class="field-values" id="values-bankAccounts"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">💳</span><span class="field-name">UPI IDs</span><span class="field-count" id="count-upiIds">0</span></div><div class="field-values" id="values-upiIds"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🔗</span><span class="field-name">URLs / Links</span><span class="field-count" id="count-urls">0</span></div><div class="field-values" id="values-urls"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📧</span><span class="field-name">Email Addresses</span><span class="field-count" id="count-emailAddresses">0</span></div><div class="field-values" id="values-emailAddresses"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🏛️</span><span class="field-name">IFSC Codes</span><span class="field-count" id="count-ifscCodes">0</span></div><div class="field-values" id="values-ifscCodes"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🔖</span><span class="field-name">Case / Ref IDs</span><span class="field-count" id="count-caseIds">0</span></div><div class="field-values" id="values-caseIds"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📜</span><span class="field-name">Policy Numbers</span><span class="field-count" id="count-policyNumbers">0</span></div><div class="field-values" id="values-policyNumbers"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📦</span><span class="field-name">Order Numbers</span><span class="field-count" id="count-orderNumbers">0</span></div><div class="field-values" id="values-orderNumbers"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">⚠️</span><span class="field-name">Suspicious Keywords</span><span class="field-count" id="count-suspiciousKeywords">0</span></div><div class="field-values" id="values-suspiciousKeywords"><span class="empty-value">None detected</span></div></div>
+                    </div>
+                </div>
+
+                <div class="intel-card">
+                    <div class="intel-card-header">
+                        <span class="intel-card-icon">📝</span>
+                        <span class="intel-card-title">Agent Notes</span>
+                    </div>
+                    <div class="agent-notes" id="agent-notes"><span class="empty-value">No notes yet</span></div>
+                </div>
+            </div>
+
+            <div class="results-trigger" id="results-trigger" style="display:none;">
+                <button class="btn btn-results" id="btn-view-results">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    View Full Intelligence Report
+                </button>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Results Modal -->
+    <div class="modal-overlay" id="results-modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><span class="modal-icon">📊</span>Final Intelligence Report</h2>
+                <button class="modal-close" id="modal-close">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body" id="results-body">
+                <div class="loading-spinner">Loading results...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

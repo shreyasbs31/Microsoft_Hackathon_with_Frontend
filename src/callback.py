@@ -196,6 +196,8 @@ async def fire_callbacks(session: HoneypotSession) -> bool:
     concurrently.
 
     Returns True if at least one callback succeeded.
+    For frontend sessions (channel='web-frontend'), skip external HTTP calls
+    but still build and store the payload for display.
     """
     payload = await build_callback_payload(session)
 
@@ -205,6 +207,15 @@ async def fire_callbacks(session: HoneypotSession) -> bool:
         session.turn_count,
     )
     logger.info("Callback payload: %s", json.dumps(payload, indent=2))
+
+    # Store payload in session for frontend access
+    session.set_callback_payload(payload)
+    session.final_callback_sent = True
+
+    # Skip external HTTP calls for frontend sessions
+    if session.channel == "web-frontend":
+        logger.info("Frontend session — skipping external GUVI callbacks")
+        return True
 
     async with httpx.AsyncClient(timeout=CALLBACK_TIMEOUT_SECONDS) as client:
         results = await asyncio.gather(
@@ -220,10 +231,6 @@ async def fire_callbacks(session: HoneypotSession) -> bool:
         success_count,
         len(results),
     )
-
-    # Store payload in session for debugging
-    session.set_callback_payload(payload)
-    session.final_callback_sent = True
 
     return success_count > 0
 

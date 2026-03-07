@@ -13,7 +13,18 @@ API_KEY = os.getenv("API_KEY", "default-dev-key")
 
 # --- LLM Provider Keys ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2", "")
+GEMINI_API_KEY_3 = os.getenv("GEMINI_API_KEY_3", "")
+GEMINI_API_KEY_4 = os.getenv("GEMINI_API_KEY_4", "")
+GEMINI_API_KEY_5 = os.getenv("GEMINI_API_KEY_5", "")
+
+# All available Gemini API keys in priority order (empty strings filtered out)
+GEMINI_API_KEYS: list[str] = [
+    k for k in [
+        GEMINI_API_KEY, GEMINI_API_KEY_2, GEMINI_API_KEY_3,
+        GEMINI_API_KEY_4, GEMINI_API_KEY_5,
+    ] if k.strip()
+]
 
 # --- Gemini Model Names ---
 GEMINI_ANALYST_MODEL = os.getenv("GEMINI_ANALYST_MODEL", "gemini-2.5-flash")
@@ -22,6 +33,7 @@ GEMINI_TRANSLATOR_MODEL = os.getenv("GEMINI_TRANSLATOR_MODEL", "gemini-2.5-flash
 GEMINI_EXTRACTOR_MODEL = os.getenv("GEMINI_EXTRACTOR_MODEL", "gemini-2.0-flash")
 
 # --- Groq Fallback Model Names ---
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_ANALYST_MODEL = os.getenv("GROQ_ANALYST_MODEL", "llama-3.3-70b-versatile")
 GROQ_PERSONA_MODEL = os.getenv("GROQ_PERSONA_MODEL", "llama-3.3-70b-versatile")
 
@@ -36,7 +48,13 @@ GUVI_CALLBACK_URL_2 = os.getenv(
 )
 
 # --- Database ---
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./honeypot_dev.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root@localhost/honeypot_db?charset=utf8mb4")
+
+# Railway injects DATABASE_URL as postgres:// — SQLAlchemy needs postgresql+psycopg2://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://") and "+psycopg2" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 # --- Timeouts ---
 LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "15"))

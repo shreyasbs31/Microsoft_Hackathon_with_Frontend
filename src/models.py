@@ -37,10 +37,11 @@ _engine_kwargs: dict = {}
 if DATABASE_URL.startswith("sqlite"):
     _connect_args["check_same_thread"] = False
 else:
-    # PostgreSQL connection pooling for concurrent sessions
+    # MySQL / PostgreSQL connection pooling for concurrent sessions
     _engine_kwargs["pool_size"] = 10
     _engine_kwargs["max_overflow"] = 20
     _engine_kwargs["pool_pre_ping"] = True
+    _engine_kwargs["pool_recycle"] = 3600  # Recycle connections every hour (MySQL wait_timeout)
 
 engine = create_engine(DATABASE_URL, connect_args=_connect_args, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -16,6 +16,7 @@ from groq import AsyncGroq
 
 from src.config import (
     GEMINI_API_KEY,
+    GEMINI_API_KEYS,
     GROQ_API_KEY,
     GEMINI_ANALYST_MODEL,
     GEMINI_PERSONA_MODEL,
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    logger.info("Gemini API key configured (len=%d)", len(GEMINI_API_KEY))
+    logger.info("Gemini primary key configured (%d keys total)", len(GEMINI_API_KEYS))
 else:
     logger.warning("No GEMINI_API_KEY found — Gemini will be unavailable")
 
@@ -213,26 +214,43 @@ async def call_llm(
     """
     Call an LLM for the given *role*.
 
-    Tries Gemini first (with model-name fallbacks); on failure, falls back
-    to Groq.  Returns the raw text response.
-    Raises RuntimeError only if BOTH providers fail.
+    Cycles through ALL available Gemini API keys first (primary + extras).
+    Only falls back to Groq if every single Gemini key fails.
+    Raises RuntimeError only if ALL providers and ALL keys fail.
     """
 
     gemini_error = None
     groq_error = None
 
-    # --- Try Gemini ---
-    if GEMINI_API_KEY:
-        try:
-            return await _call_gemini(role, system_prompt, user_prompt, json_mode)
-        except Exception as exc:
-            gemini_error = exc
-            logger.warning(
-                "Gemini [%s] failed (all models): %s — falling back to Groq",
-                role, exc,
-            )
+    # --- Try every Gemini API key in sequence ---
+    if GEMINI_API_KEYS:
+        for idx, api_key in enumerate(GEMINI_API_KEYS):
+            try:
+                # Reconfigure with this specific key
+                genai.configure(api_key=api_key)
+                # Clear model cache so the new key gets a fresh attempt
+                _working_gemini_model.pop(role, None)
+                result = await _call_gemini(role, system_prompt, user_prompt, json_mode)
+                if idx > 0:
+                    logger.info("Gemini key #%d succeeded for role=%s", idx + 1, role)
+                return result
+            except Exception as exc:
+                gemini_error = exc
+                logger.warning(
+                    "Gemini key #%d failed for role=%s: %s — trying next key",
+                    idx + 1, role, exc,
+                )
+                _working_gemini_model.pop(role, None)
+                continue
 
-    # --- Fallback: Groq ---
+        logger.warning(
+            "All %d Gemini key(s) exhausted for role=%s — falling back to Groq",
+            len(GEMINI_API_KEYS), role,
+        )
+    else:
+        logger.warning("No Gemini API keys configured — falling back to Groq")
+
+    # --- Emergency fallback: Groq ---
     if GROQ_API_KEY and _groq_client:
         try:
             return await _call_groq(role, system_prompt, user_prompt, json_mode)
@@ -240,12 +258,12 @@ async def call_llm(
             groq_error = exc
             logger.error("Groq [%s] also failed: %s", role, exc)
 
-    # Both failed — log full details
+    # All providers failed
     logger.error(
-        "ALL LLM providers failed for role=%s. Gemini: %s | Groq: %s",
+        "ALL LLM providers failed for role=%s. Last Gemini error: %s | Groq: %s",
         role, gemini_error, groq_error,
     )
     raise RuntimeError(
         f"All LLM providers failed for role={role}. "
-        f"Gemini: {gemini_error} | Groq: {groq_error}"
+        f"Gemini ({len(GEMINI_API_KEYS)} keys tried): {gemini_error} | Groq: {groq_error}"
     )

@@ -9,13 +9,18 @@ within a single session, turns are serialised via per-session locks.
 import asyncio
 import json
 import logging
+import os
 import random
 import time
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.config import API_KEY, FALLBACK_REPLIES, MAX_TURNS
@@ -38,7 +43,7 @@ from src.extractor import (
 from src.analyst import analyse_message
 from src.persona import generate_response
 from src.translator import translate_to_english
-from src.callback import fire_callbacks
+from src.callback import fire_callbacks, build_callback_payload
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -83,6 +88,11 @@ class HoneypotResponse(BaseModel):
 # App lifecycle
 # ---------------------------------------------------------------------------
 
+# Resolve project root and static directory
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_STATIC_DIR = _PROJECT_ROOT / "static"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialise DB on startup."""
@@ -97,20 +107,35 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ---------------------------------------------------------------------------
+# CORS — allow frontend to talk to the API
+# ---------------------------------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ---------------------------------------------------------------------------
 # Middleware — API key validation
 # ---------------------------------------------------------------------------
 
+_FRONTEND_PATH_PREFIXES = ("/api/chat", "/api/session", "/static")
+
 @app.middleware("http")
 async def validate_api_key(request: Request, call_next):
-    """Validate x-api-key header on all routes except /health."""
-    if request.url.path in ("/health", "/docs", "/openapi.json"):
+    """Validate x-api-key header on all routes except public ones."""
+    _PUBLIC_PATHS = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/favicon.ico"}
+    path = request.url.path
+    if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _FRONTEND_PATH_PREFIXES):
         return await call_next(request)
 
     api_key = request.headers.get("x-api-key", "")
     if api_key != API_KEY:
-        # Return 401 on invalid API key so callers can detect auth failures.
         return JSONResponse(
             status_code=401,
             content={"status": "error", "detail": "Invalid API key"},
@@ -120,8 +145,25 @@ async def validate_api_key(request: Request, call_next):
 
 
 # ---------------------------------------------------------------------------
-# Health check
+# Static files + root
 # ---------------------------------------------------------------------------
+
+if _STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+
+# ---------------------------------------------------------------------------
+# Health check & root
+# ---------------------------------------------------------------------------
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Serve the frontend if it exists, otherwise redirect to docs."""
+    index = _STATIC_DIR / "index.html"
+    if index.is_file():
+        return FileResponse(str(index))
+    return RedirectResponse(url="/docs")
+
 
 @app.get("/health")
 async def health():
@@ -173,6 +215,154 @@ async def honeypot(request: HoneypotRequest):
 async def api_message(request: HoneypotRequest):
     """Alias for /honeypot — the GUVI evaluation platform uses this path."""
     return await honeypot(request)
+
+
+# ---------------------------------------------------------------------------
+# Frontend-facing API endpoints
+# ---------------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
+    sessionId: str | None = None
+    message: str
+    conversationHistory: list[dict] = Field(default_factory=list)
+    language: str = "English"
+
+
+@app.post("/api/chat")
+async def api_chat(req: ChatRequest):
+    """
+    Frontend chat endpoint — sends a scammer message, returns AI reply
+    plus live-updated intelligence and session state.
+    """
+    session_id = req.sessionId or str(uuid.uuid4())
+
+    # Build a HoneypotRequest to reuse the existing pipeline
+    honeypot_req = HoneypotRequest(
+        sessionId=session_id,
+        message=MessageBody(
+            sender="scammer",
+            text=req.message,
+            timestamp=int(time.time() * 1000),
+        ),
+        conversationHistory=req.conversationHistory,
+        metadata=MetadataBody(
+            channel="web-frontend",
+            language=req.language,
+            locale="IN",
+        ),
+    )
+
+    # Run the processing pipeline
+    async with session_lock_manager.get(session_id):
+        try:
+            reply = await _process_turn(honeypot_req)
+        except Exception as exc:
+            logger.error("Chat error for session %s: %s", session_id, exc, exc_info=True)
+            reply = random.choice(FALLBACK_REPLIES)
+
+    # Remove asterisks
+    if isinstance(reply, str):
+        reply = reply.replace("*", "")
+
+    # Fetch session state for the response
+    db = SessionLocal()
+    try:
+        session = db.query(HoneypotSession).filter(
+            HoneypotSession.session_id == session_id
+        ).first()
+
+        session_data = _build_session_response(session) if session else {}
+    finally:
+        db.close()
+
+    return JSONResponse(content={
+        "status": "success",
+        "sessionId": session_id,
+        "reply": reply,
+        "session": session_data,
+    })
+
+
+@app.get("/api/session/{session_id}")
+async def get_session(session_id: str):
+    """Fetch current session state including all extracted intelligence."""
+    db = SessionLocal()
+    try:
+        session = db.query(HoneypotSession).filter(
+            HoneypotSession.session_id == session_id
+        ).first()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return JSONResponse(content={
+            "status": "success",
+            "session": _build_session_response(session),
+        })
+    finally:
+        db.close()
+
+
+@app.get("/api/session/{session_id}/results")
+async def get_session_results(session_id: str):
+    """Fetch the final callback payload for a completed session."""
+    db = SessionLocal()
+    try:
+        session = db.query(HoneypotSession).filter(
+            HoneypotSession.session_id == session_id
+        ).first()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session.turn_count < MAX_TURNS:
+            return JSONResponse(content={
+                "status": "pending",
+                "message": f"Session has {session.turn_count}/{MAX_TURNS} turns. Complete all turns to see results.",
+                "turnsRemaining": MAX_TURNS - session.turn_count,
+            })
+
+        # Return stored callback payload, or build it fresh
+        payload = session.get_callback_payload()
+        if not payload:
+            payload = await build_callback_payload(session)
+            session.set_callback_payload(payload)
+            db.commit()
+
+        return JSONResponse(content={
+            "status": "success",
+            "results": payload,
+        })
+    finally:
+        db.close()
+
+
+def _build_session_response(session: HoneypotSession) -> dict:
+    """Build a JSON-serialisable dict of the session state for the frontend."""
+    return {
+        "sessionId": session.session_id,
+        "status": session.status.value,
+        "scamType": session.scam_type,
+        "turnCount": session.turn_count,
+        "maxTurns": MAX_TURNS,
+        "isActive": session.is_active,
+        "confidenceLevel": session.confidence_level,
+        "finalCallbackSent": session.final_callback_sent,
+        "intelligence": {
+            "phoneNumbers": session.get_phone_numbers(),
+            "bankAccounts": session.get_bank_accounts(),
+            "upiIds": session.get_upi_ids(),
+            "urls": session.get_urls(),
+            "emailAddresses": session.get_email_addresses(),
+            "ifscCodes": session.get_ifsc_codes(),
+            "caseIds": session.get_case_ids(),
+            "policyNumbers": session.get_policy_numbers(),
+            "orderNumbers": session.get_order_numbers(),
+            "employeeIds": session.get_employee_ids(),
+            "suspiciousKeywords": session.get_suspicious_keywords(),
+        },
+        "agentNotes": session.agent_notes or "",
+    }
 
 
 # ---------------------------------------------------------------------------
