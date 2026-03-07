@@ -49,8 +49,9 @@ GUVI_CALLBACK_URL_2 = os.getenv(
 
 # --- Database ---
 # Default: SQLite (zero-config, works locally and on Railway without a DB plugin).
-# Override via DATABASE_URL env var for PostgreSQL/MySQL in production.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./honeypot.db")
+# Using 'or' so that an empty string DATABASE_URL also falls back to SQLite
+# (Railway sometimes injects empty string before Postgres is ready).
+DATABASE_URL = os.getenv("DATABASE_URL", "") or "sqlite:///./honeypot.db"
 
 # Railway injects DATABASE_URL as postgres:// — SQLAlchemy needs postgresql+psycopg2://
 if DATABASE_URL.startswith("postgres://"):
