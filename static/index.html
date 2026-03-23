@@ -3,43 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🍯 Honeypot Scam Detection System</title>
+    <title>Honeypot Scam Detection System | Intelligence Platform</title>
     <meta name="description" content="AI-powered honeypot system that detects scam messages, engages scammers, and extracts actionable intelligence.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Roboto+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <div class="bg-grid"></div>
-    <div class="bg-glow bg-glow-1"></div>
-    <div class="bg-glow bg-glow-2"></div>
+    <!-- Blueprint Grid Background -->
+    <div class="blueprint-grid"></div>
+    <div class="blueprint-texture"></div>
+
+    <!-- Cursor Coordinate Tracker -->
+    <div class="cursor-coords" id="cursor-coords">
+        <span class="coord-label">x:</span><span id="coord-x">0</span>
+        <span class="coord-label">y:</span><span id="coord-y">0</span>
+    </div>
 
     <!-- Top Bar -->
     <header class="top-bar">
         <div class="top-bar-left">
             <button class="btn-scripts-toggle" id="btn-scripts-toggle" title="Toggle Scammer Scripts Panel">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
-                Scripts
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+                <span>SCRIPTS</span>
             </button>
             <div class="logo">
-                <span class="logo-icon">🍯</span>
+                <div class="logo-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                </div>
                 <div class="logo-text">
-                    <h1>Honeypot</h1>
-                    <span class="logo-subtitle">Scam Detection System</span>
+                    <h1>HONEYPOT</h1>
+                    <span class="logo-subtitle">SCAM DETECTION SYSTEM v2.0</span>
                 </div>
             </div>
         </div>
         <div class="top-bar-center">
             <div class="session-id-display" id="session-id-display" title="Click to copy session ID">
-                <span class="session-label">Session</span>
-                <span class="session-value" id="session-id-value">—</span>
+                <span class="session-label">SESSION</span>
+                <span class="session-divider">//</span>
+                <span class="session-value" id="session-id-value">---</span>
             </div>
         </div>
         <div class="top-bar-right">
-            <button class="btn btn-outline" id="btn-new-session">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                New Session
+            <div class="dimension-marker">
+                <span class="dim-arrow">&lt;---</span>
+                <span class="dim-value">ACTIVE</span>
+                <span class="dim-arrow">---&gt;</span>
+            </div>
+            <button class="btn btn-stamp" id="btn-new-session">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <span>NEW SESSION</span>
             </button>
         </div>
     </header>
@@ -51,10 +69,10 @@
         <aside class="scripts-drawer" id="scripts-drawer">
             <div class="scripts-header">
                 <div class="scripts-header-title">
-                    <span>🎭</span>
-                    <span>Scammer Scripts</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                    <span>SCRIPT LIBRARY</span>
                 </div>
-                <p class="scripts-subtitle">Click any message to load it into the chat. Work through the turns in order for a complete 10-turn session.</p>
+                <p class="scripts-subtitle">Select a message to load into chat. Complete all 10 turns for full intelligence extraction.</p>
             </div>
 
             <div class="scripts-tabs" id="scripts-tabs">
@@ -67,11 +85,11 @@
 
             <div class="scripts-footer">
                 <div class="scripts-progress-info" id="scripts-progress-info">
-                    Turn <span id="script-current-turn">0</span> / <span id="script-total-turns">10</span>
+                    TURN <span id="script-current-turn">0</span> / <span id="script-total-turns">10</span>
                 </div>
                 <button class="btn-next-turn" id="btn-next-turn" disabled>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    Load Next Turn
+                    <span>LOAD NEXT</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </button>
             </div>
         </aside>
@@ -81,73 +99,86 @@
             <div class="chat-header">
                 <div class="chat-header-left">
                     <div class="chat-avatar">
-                        <span>🤖</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4M12 8h.01"/>
+                        </svg>
                         <span class="avatar-status-dot active"></span>
                     </div>
                     <div class="chat-header-info">
-                        <h2>AI Honeypot Agent</h2>
-                        <span class="chat-status" id="chat-status">Online • Ready to engage</span>
+                        <h2>AI HONEYPOT AGENT</h2>
+                        <span class="chat-status" id="chat-status">ONLINE // READY</span>
                     </div>
                 </div>
                 <div class="chat-header-right">
                     <div class="turn-counter" id="turn-counter">
-                        <span class="turn-label">Turn</span>
+                        <span class="turn-label">TURN</span>
                         <span class="turn-value" id="turn-value">0</span>
                         <span class="turn-sep">/</span>
                         <span class="turn-max" id="turn-max">10</span>
                     </div>
                     <div class="turn-progress-bar">
                         <div class="turn-progress-fill" id="turn-progress-fill" style="width: 0%"></div>
+                        <div class="progress-markers">
+                            <span></span><span></span><span></span><span></span><span></span>
+                            <span></span><span></span><span></span><span></span><span></span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="chat-messages" id="chat-messages">
                 <div class="welcome-message">
-                    <div class="welcome-icon">🕵️</div>
-                    <h3>Welcome to the Honeypot</h3>
-                    <p>You are role-playing as a <strong>scammer</strong>. Send scam messages and watch the AI agent extract your intelligence in real time.</p>
+                    <div class="welcome-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <h3>WELCOME TO THE HONEYPOT</h3>
+                    <p>You are role-playing as a <strong>scammer</strong>. Send scam messages and observe the AI agent extract intelligence in real time.</p>
                     <div class="welcome-cta-strip">
                         <div class="cta-item">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
-                            <span>Use the <strong>Scripts</strong> panel on the left for pre-written scam messages</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
+                            <span>Use the <strong>SCRIPTS</strong> panel for pre-written scam conversations</span>
                         </div>
                         <div class="cta-item cta-highlight">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                            <span>After <strong>10 turns</strong>, unlock the full intelligence report!</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+                            <span>Complete <strong>10 TURNS</strong> to unlock the full intelligence report</span>
                         </div>
                     </div>
                     <div class="welcome-quick-starts">
-                        <span class="example-label">Quick-start examples:</span>
-                        <button class="example-btn" data-message="URGENT: Your SBI account has been compromised. Your account will be blocked in 2 hours. Share your account number and OTP immediately to verify your identity.">🏦 Bank Fraud</button>
-                        <button class="example-btn" data-message="URGENT: Your Aadhaar eKYC has expired. Your bank account will be BLOCKED in 24 hours. Call us immediately at +91-8876543210 to re-verify.">📋 KYC Fraud</button>
-                        <button class="example-btn" data-message="CONGRATULATIONS! You have won Rs 50,00,000 in the National Digital India Lottery 2024! Ticket number LT-2024-77654. Call now at +91-9988776655 to claim.">🎰 Lottery Fraud</button>
-                        <button class="example-btn" data-message="URGENT LEGAL NOTICE: Income Tax Department. A tax evasion FIR number ITD-2024-CR-55321 has been registered against your PAN. Call immediately: +91-9911223344.">📝 Tax Fraud</button>
+                        <span class="example-label">// QUICK START TEMPLATES</span>
+                        <button class="example-btn" data-message="URGENT: Your SBI account has been compromised. Your account will be blocked in 2 hours. Share your account number and OTP immediately to verify your identity.">[01] BANK FRAUD</button>
+                        <button class="example-btn" data-message="URGENT: Your Aadhaar eKYC has expired. Your bank account will be BLOCKED in 24 hours. Call us immediately at +91-8876543210 to re-verify.">[02] KYC FRAUD</button>
+                        <button class="example-btn" data-message="CONGRATULATIONS! You have won Rs 50,00,000 in the National Digital India Lottery 2024! Ticket number LT-2024-77654. Call now at +91-9988776655 to claim.">[03] LOTTERY FRAUD</button>
+                        <button class="example-btn" data-message="URGENT LEGAL NOTICE: Income Tax Department. A tax evasion FIR ITD-2024-CR-55321 has been registered against your PAN. Call immediately: +91-9911223344.">[04] TAX FRAUD</button>
                     </div>
                 </div>
             </div>
 
             <!-- 10-turn results teaser (shown after turn 5) -->
             <div class="results-teaser" id="results-teaser" style="display:none;">
-                <span class="teaser-icon">🏁</span>
-                <span class="teaser-text"><strong>Almost there!</strong> Complete your 10-turn conversation to unlock the full intelligence report.</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+                <span class="teaser-text"><strong>PROGRESS:</strong> Complete your 10-turn conversation to unlock the full intelligence report.</span>
             </div>
 
             <div class="typing-indicator" id="typing-indicator">
                 <div class="typing-dots"><span></span><span></span><span></span></div>
-                <span class="typing-text">AI is crafting a response...</span>
+                <span class="typing-text">AI PROCESSING...</span>
             </div>
 
             <form class="chat-input-area" id="chat-form">
                 <div class="input-wrapper">
-                    <textarea id="chat-input" placeholder="Type your scammer message, or use the Scripts panel on the left →" rows="1" maxlength="2000" autofocus></textarea>
+                    <div class="input-prefix">MSG //</div>
+                    <textarea id="chat-input" placeholder="Enter scammer message or use Scripts panel..." rows="1" maxlength="2000" autofocus></textarea>
                     <button type="submit" class="btn-send" id="btn-send" title="Send message">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
                     </button>
                 </div>
                 <div class="input-footer">
                     <span class="char-count" id="char-count">0 / 2000</span>
-                    <span class="input-hint">Enter to send • Shift+Enter for new line</span>
+                    <span class="input-hint">ENTER to send // SHIFT+ENTER for new line</span>
                 </div>
             </form>
         </section>
@@ -156,64 +187,70 @@
         <aside class="intel-panel" id="intel-panel">
             <div class="intel-header">
                 <h2>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
-                    Intelligence Dashboard
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+                    INTELLIGENCE DASHBOARD
                 </h2>
+                <div class="header-coords">
+                    <span>w:360</span>
+                </div>
             </div>
 
-            <!-- 10-turn results notice — always visible -->
+            <!-- 10-turn results notice -->
             <div class="ten-turn-notice">
-                <div class="ten-turn-icon">🏆</div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
                 <div class="ten-turn-content">
-                    <strong>Complete 10 turns</strong> to unlock the full intelligence report with all extracted data, scam analysis, and agent notes.
+                    <strong>OBJECTIVE:</strong> Complete 10 turns to unlock the full intelligence report with extracted data, scam analysis, and agent notes.
                 </div>
             </div>
 
             <div class="intel-content" id="intel-content">
                 <div class="intel-card status-card">
                     <div class="intel-card-header">
-                        <span class="intel-card-icon">🎯</span>
-                        <span class="intel-card-title">Detection Status</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        <span class="intel-card-title">DETECTION STATUS</span>
                     </div>
                     <div class="status-grid">
                         <div class="status-item">
-                            <span class="status-label">Classification</span>
+                            <span class="status-label">CLASSIFICATION</span>
                             <span class="status-badge" id="status-badge">NEUTRAL</span>
                         </div>
                         <div class="status-item">
-                            <span class="status-label">Scam Type</span>
-                            <span class="status-value" id="scam-type">—</span>
+                            <span class="status-label">SCAM TYPE</span>
+                            <span class="status-value" id="scam-type">---</span>
                         </div>
                         <div class="status-item">
-                            <span class="status-label">Confidence</span>
-                            <span class="status-value" id="confidence-level">—</span>
+                            <span class="status-label">CONFIDENCE</span>
+                            <span class="status-value" id="confidence-level">---</span>
                         </div>
                     </div>
                 </div>
 
                 <div class="intel-card">
                     <div class="intel-card-header">
-                        <span class="intel-card-icon">📡</span>
-                        <span class="intel-card-title">Extracted Intelligence</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        <span class="intel-card-title">EXTRACTED INTELLIGENCE</span>
                     </div>
                     <div class="intel-fields" id="intel-fields">
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📱</span><span class="field-name">Phone Numbers</span><span class="field-count" id="count-phoneNumbers">0</span></div><div class="field-values" id="values-phoneNumbers"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🏦</span><span class="field-name">Bank Accounts</span><span class="field-count" id="count-bankAccounts">0</span></div><div class="field-values" id="values-bankAccounts"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">💳</span><span class="field-name">UPI IDs</span><span class="field-count" id="count-upiIds">0</span></div><div class="field-values" id="values-upiIds"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🔗</span><span class="field-name">URLs / Links</span><span class="field-count" id="count-urls">0</span></div><div class="field-values" id="values-urls"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📧</span><span class="field-name">Email Addresses</span><span class="field-count" id="count-emailAddresses">0</span></div><div class="field-values" id="values-emailAddresses"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🏛️</span><span class="field-name">IFSC Codes</span><span class="field-count" id="count-ifscCodes">0</span></div><div class="field-values" id="values-ifscCodes"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">🔖</span><span class="field-name">Case / Ref IDs</span><span class="field-count" id="count-caseIds">0</span></div><div class="field-values" id="values-caseIds"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📜</span><span class="field-name">Policy Numbers</span><span class="field-count" id="count-policyNumbers">0</span></div><div class="field-values" id="values-policyNumbers"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">📦</span><span class="field-name">Order Numbers</span><span class="field-count" id="count-orderNumbers">0</span></div><div class="field-values" id="values-orderNumbers"><span class="empty-value">None extracted</span></div></div>
-                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon">⚠️</span><span class="field-name">Suspicious Keywords</span><span class="field-count" id="count-suspiciousKeywords">0</span></div><div class="field-values" id="values-suspiciousKeywords"><span class="empty-value">None detected</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></span><span class="field-name">Phone Numbers</span><span class="field-count" id="count-phoneNumbers">0</span></div><div class="field-values" id="values-phoneNumbers"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><span class="field-name">Bank Accounts</span><span class="field-count" id="count-bankAccounts">0</span></div><div class="field-values" id="values-bankAccounts"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/></svg></span><span class="field-name">UPI IDs</span><span class="field-count" id="count-upiIds">0</span></div><div class="field-values" id="values-upiIds"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></span><span class="field-name">URLs / Links</span><span class="field-count" id="count-urls">0</span></div><div class="field-values" id="values-urls"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg></span><span class="field-name">Email Addresses</span><span class="field-count" id="count-emailAddresses">0</span></div><div class="field-values" id="values-emailAddresses"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 7v1a3 3 0 006 0V7m0 1a3 3 0 006 0V7m0 1a3 3 0 006 0V7H3l2-4h14l2 4M5 21V10.85M19 21V10.85"/></svg></span><span class="field-name">IFSC Codes</span><span class="field-count" id="count-ifscCodes">0</span></div><div class="field-values" id="values-ifscCodes"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1"/></svg></span><span class="field-name">Case / Ref IDs</span><span class="field-count" id="count-caseIds">0</span></div><div class="field-values" id="values-caseIds"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span><span class="field-name">Policy Numbers</span><span class="field-count" id="count-policyNumbers">0</span></div><div class="field-values" id="values-policyNumbers"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg></span><span class="field-name">Order Numbers</span><span class="field-count" id="count-orderNumbers">0</span></div><div class="field-values" id="values-orderNumbers"><span class="empty-value">None extracted</span></div></div>
+                        <div class="intel-field"><div class="intel-field-header"><span class="field-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg></span><span class="field-name">Suspicious Keywords</span><span class="field-count" id="count-suspiciousKeywords">0</span></div><div class="field-values" id="values-suspiciousKeywords"><span class="empty-value">None detected</span></div></div>
                     </div>
                 </div>
 
                 <div class="intel-card">
                     <div class="intel-card-header">
-                        <span class="intel-card-icon">📝</span>
-                        <span class="intel-card-title">Agent Notes</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                        <span class="intel-card-title">AGENT NOTES</span>
                     </div>
                     <div class="agent-notes" id="agent-notes"><span class="empty-value">No notes yet</span></div>
                 </div>
@@ -221,8 +258,8 @@
 
             <div class="results-trigger" id="results-trigger" style="display:none;">
                 <button class="btn btn-results" id="btn-view-results">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-                    View Full Intelligence Report
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                    <span>VIEW FULL INTELLIGENCE REPORT</span>
                 </button>
             </div>
         </aside>
@@ -232,9 +269,12 @@
     <div class="modal-overlay" id="results-modal" style="display:none;">
         <div class="modal-content">
             <div class="modal-header">
-                <h2><span class="modal-icon">📊</span>Final Intelligence Report</h2>
+                <h2>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                    FINAL INTELLIGENCE REPORT
+                </h2>
                 <button class="modal-close" id="modal-close">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
             </div>
             <div class="modal-body" id="results-body">

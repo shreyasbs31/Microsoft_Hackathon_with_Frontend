@@ -1,5 +1,6 @@
 /**
  * Honeypot Scam Detection — Frontend App
+ * Architectural Blueprint Design System
  * Chat, session management, intel dashboard, scammer scripts panel.
  */
 
@@ -8,13 +9,13 @@
 
     // ================================================================
     // Scammer Scripts Data
-    // 5 fraud types × 10 pre-written turns each
+    // 5 fraud types x 10 pre-written turns each
     // ================================================================
     const SCAMMER_SCRIPTS = [
         {
             id: 'bank_fraud',
-            icon: '🏦',
-            label: 'Bank Fraud',
+            icon: 'BNK',
+            label: 'BANK FRAUD',
             turns: [
                 "URGENT: Your SBI account has been compromised. Your account will be blocked in 2 hours. Share your account number and OTP immediately to verify your identity.",
                 "I'm sorry we can't provide a public line, but you can reach us securely at +91-9876543210 – please send your account number and OTP immediately to avoid the block.",
@@ -30,8 +31,8 @@
         },
         {
             id: 'kyc_fraud',
-            icon: '📋',
-            label: 'KYC Fraud',
+            icon: 'KYC',
+            label: 'KYC FRAUD',
             turns: [
                 "URGENT: Your Aadhaar eKYC has expired. Your bank account linked to Aadhaar will be BLOCKED in 24 hours. Call us immediately at +91-8876543210 to re-verify.",
                 "I am Officer Priya from the UIDAI helpdesk. Your account 556677889900 shows incomplete KYC. Please share your 12-digit Aadhaar number and the OTP you just received for re-verification.",
@@ -47,8 +48,8 @@
         },
         {
             id: 'lottery_fraud',
-            icon: '🎰',
-            label: 'Lottery Fraud',
+            icon: 'LTR',
+            label: 'LOTTERY FRAUD',
             turns: [
                 "CONGRATULATIONS! You have won Rs 50,00,000 in the National Digital India Lottery 2024! Ticket number LT-2024-77654. Call us now at +91-9988776655 to claim your prize.",
                 "I am Mr. Vikram from the National Lottery Board. To transfer your prize of Rs 50 lakhs, I need your full bank account number and the name as on your account.",
@@ -64,8 +65,8 @@
         },
         {
             id: 'upi_refund',
-            icon: '📱',
-            label: 'UPI Refund Scam',
+            icon: 'UPI',
+            label: 'UPI REFUND SCAM',
             turns: [
                 "Hello sir/ma'am, I am calling from Amazon Customer Support. We noticed an unauthorized transaction of Rs 4,999 from your account. I will process your immediate refund.",
                 "To initiate the refund, please share your registered UPI ID or phone number. Refund Order ID: REF-AMZ-2024-887754. I will credit the money in 2 minutes.",
@@ -81,8 +82,8 @@
         },
         {
             id: 'tax_fraud',
-            icon: '📝',
-            label: 'Income Tax Fraud',
+            icon: 'TAX',
+            label: 'INCOME TAX FRAUD',
             turns: [
                 "URGENT LEGAL NOTICE: This is the Income Tax Department, India. A tax evasion FIR number ITD-2024-CR-55321 has been registered against your PAN ABCPX1234Y. Call immediately: +91-9911223344.",
                 "I am ITO Senior Inspector Rajesh Sharma, badge ID ITO-CBI-7823. Your PAN shows Rs 12 lakh undisclosed income in FY 2022-23. Please cooperate to avoid immediate arrest.",
@@ -108,8 +109,8 @@
 
     let scriptsOpen = false;
     let activeScriptIdx = 0;
-    let scriptTurnIndex = 0;   // next turn to load
-    let scriptSentTurns = [];  // which turns have been sent (per script)
+    let scriptTurnIndex = 0;
+    let scriptSentTurns = [];
 
     // ================================================================
     // DOM refs
@@ -144,6 +145,31 @@
     const btnNextTurn = $('#btn-next-turn');
     const scriptCurrentTurn = $('#script-current-turn');
     const scriptTotalTurns = $('#script-total-turns');
+    const cursorCoords = $('#cursor-coords');
+    const coordX = $('#coord-x');
+    const coordY = $('#coord-y');
+
+    // ================================================================
+    // Cursor Coordinate Tracker
+    // ================================================================
+    function initCursorTracker() {
+        document.addEventListener('mousemove', (e) => {
+            if (cursorCoords && coordX && coordY) {
+                cursorCoords.style.left = (e.clientX + 15) + 'px';
+                cursorCoords.style.top = (e.clientY + 15) + 'px';
+                coordX.textContent = e.clientX;
+                coordY.textContent = e.clientY;
+            }
+        });
+
+        document.addEventListener('mouseenter', () => {
+            if (cursorCoords) cursorCoords.classList.add('active');
+        });
+
+        document.addEventListener('mouseleave', () => {
+            if (cursorCoords) cursorCoords.classList.remove('active');
+        });
+    }
 
     // ================================================================
     // Helpers
@@ -154,17 +180,21 @@
             return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
         });
     }
+
     function formatTime(date) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
+
     function escapeHtml(text) {
         const d = document.createElement('div');
         d.textContent = text;
         return d.innerHTML;
     }
+
     function scrollToBottom() {
         requestAnimationFrame(() => { chatMessages.scrollTop = chatMessages.scrollHeight; });
     }
+
     function autoResize() {
         chatInput.style.height = 'auto';
         chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
@@ -181,15 +211,15 @@
         scriptTurnIndex = 0;
         scriptSentTurns = SCAMMER_SCRIPTS.map(() => new Set());
 
-        sessionIdValue.textContent = sessionId.slice(0, 8) + '…';
+        sessionIdValue.textContent = sessionId.slice(0, 8).toUpperCase();
         turnValue.textContent = '0';
         turnMax.textContent = '10';
         turnProgressFill.style.width = '0%';
-        chatStatus.textContent = 'Online • Ready to engage';
+        chatStatus.textContent = 'ONLINE // READY';
         statusBadge.textContent = 'NEUTRAL';
         statusBadge.className = 'status-badge';
-        scamTypeEl.textContent = '—';
-        confidenceLevelEl.textContent = '—';
+        scamTypeEl.textContent = '---';
+        confidenceLevelEl.textContent = '---';
         agentNotes.innerHTML = '<span class="empty-value">No notes yet</span>';
         resultsTrigger.style.display = 'none';
         resultsTeaser.style.display = 'none';
@@ -210,7 +240,7 @@
         renderWelcome();
         updateScriptPanel();
         chatInput.disabled = false;
-        chatInput.placeholder = 'Type your scammer message, or use the Scripts panel on the left →';
+        chatInput.placeholder = 'Enter scammer message or use Scripts panel...';
         btnSend.disabled = false;
         chatInput.focus();
     }
@@ -218,25 +248,30 @@
     function renderWelcome() {
         chatMessages.innerHTML = `
         <div class="welcome-message">
-            <div class="welcome-icon">🕵️</div>
-            <h3>Welcome to the Honeypot</h3>
-            <p>You are role-playing as a <strong>scammer</strong>. Send scam messages and watch the AI agent extract your intelligence in real time.</p>
+            <div class="welcome-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="M9 12l2 2 4-4"/>
+                </svg>
+            </div>
+            <h3>WELCOME TO THE HONEYPOT</h3>
+            <p>You are role-playing as a <strong>scammer</strong>. Send scam messages and observe the AI agent extract intelligence in real time.</p>
             <div class="welcome-cta-strip">
                 <div class="cta-item">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
-                    <span>Use the <strong>Scripts</strong> button above for pre-written 10-turn scam conversations</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/></svg>
+                    <span>Use the <strong>SCRIPTS</strong> panel for pre-written scam conversations</span>
                 </div>
                 <div class="cta-item cta-highlight">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                    <span>After <strong>10 turns</strong>, unlock the full intelligence report!</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+                    <span>Complete <strong>10 TURNS</strong> to unlock the full intelligence report</span>
                 </div>
             </div>
             <div class="welcome-quick-starts">
-                <span class="example-label">Quick-start examples:</span>
-                <button class="example-btn" data-message="URGENT: Your SBI account has been compromised. Your account will be blocked in 2 hours. Share your account number and OTP immediately to verify your identity.">🏦 Bank Fraud</button>
-                <button class="example-btn" data-message="URGENT: Your Aadhaar eKYC has expired. Your bank account will be BLOCKED in 24 hours. Call us immediately at +91-8876543210 to re-verify.">📋 KYC Fraud</button>
-                <button class="example-btn" data-message="CONGRATULATIONS! You have won Rs 50,00,000 in the National Digital India Lottery 2024! Ticket number LT-2024-77654. Call now at +91-9988776655 to claim.">🎰 Lottery Fraud</button>
-                <button class="example-btn" data-message="URGENT LEGAL NOTICE: Income Tax Department. A tax evasion FIR ITD-2024-CR-55321 has been registered against your PAN. Call immediately: +91-9911223344.">📝 Tax Fraud</button>
+                <span class="example-label">// QUICK START TEMPLATES</span>
+                <button class="example-btn" data-message="URGENT: Your SBI account has been compromised. Your account will be blocked in 2 hours. Share your account number and OTP immediately to verify your identity.">[01] BANK FRAUD</button>
+                <button class="example-btn" data-message="URGENT: Your Aadhaar eKYC has expired. Your bank account will be BLOCKED in 24 hours. Call us immediately at +91-8876543210 to re-verify.">[02] KYC FRAUD</button>
+                <button class="example-btn" data-message="CONGRATULATIONS! You have won Rs 50,00,000 in the National Digital India Lottery 2024! Ticket number LT-2024-77654. Call now at +91-9988776655 to claim.">[03] LOTTERY FRAUD</button>
+                <button class="example-btn" data-message="URGENT LEGAL NOTICE: Income Tax Department. A tax evasion FIR ITD-2024-CR-55321 has been registered against your PAN. Call immediately: +91-9911223344.">[04] TAX FRAUD</button>
             </div>
         </div>`;
         bindExampleButtons();
@@ -246,10 +281,9 @@
     // Scripts Panel
     // ================================================================
     function buildScriptsPanel() {
-        // Build tabs
         scriptsTabs.innerHTML = SCAMMER_SCRIPTS.map((s, i) =>
             `<button class="scripts-tab ${i === 0 ? 'active' : ''}" data-idx="${i}">
-                <span class="scripts-tab-icon">${s.icon}</span>
+                <span class="scripts-tab-icon">[${s.icon}]</span>
                 <span class="scripts-tab-label">${s.label}</span>
                 <span class="scripts-tab-count">${s.turns.length}</span>
             </button>`
@@ -278,8 +312,8 @@
             <div class="script-turn-item ${isSent ? 'sent' : ''} ${isNext && !isSent ? 'active' : ''}"
                  data-turn="${i}" data-script="${activeScriptIdx}">
                 <div>
-                    <div class="turn-num">${i + 1}</div>
-                    <div class="turn-sent-badge">✓ sent</div>
+                    <div class="turn-num">${String(i + 1).padStart(2, '0')}</div>
+                    <div class="turn-sent-badge">SENT</div>
                 </div>
                 <div class="turn-text">${escapeHtml(text)}</div>
             </div>`;
@@ -302,7 +336,7 @@
         for (let i = 0; i < script.turns.length; i++) {
             if (!sentSet.has(i)) return i;
         }
-        return -1; // all sent
+        return -1;
     }
 
     function updateScriptPanel() {
@@ -324,7 +358,6 @@
         charCount.textContent = `${text.length} / 2000`;
         autoResize();
 
-        // Highlight active turn
         scriptsMessages.querySelectorAll('.script-turn-item').forEach(el => {
             el.classList.remove('active');
             if (parseInt(el.dataset.turn) === turnIdx) el.classList.add('active');
@@ -353,8 +386,9 @@
 
         const div = document.createElement('div');
         div.className = `message ${role}`;
+        const senderLabel = role === 'scammer' ? 'SCAMMER // YOU' : 'AI HONEYPOT AGENT';
         div.innerHTML = `
-            <span class="message-sender">${role === 'scammer' ? 'You (Scammer)' : '🤖 AI Honeypot'}</span>
+            <span class="message-sender">${senderLabel}</span>
             <div class="message-bubble">${escapeHtml(text)}</div>
             <span class="message-time">${formatTime(new Date())}</span>`;
         chatMessages.appendChild(div);
@@ -367,7 +401,6 @@
     async function sendMessage(text) {
         if (!text.trim() || isSending || sessionComplete) return;
 
-        // Detect if this text matches a script turn
         let matchedScriptIdx = null;
         let matchedTurnIdx = null;
         for (let si = 0; si < SCAMMER_SCRIPTS.length; si++) {
@@ -379,7 +412,7 @@
         btnSend.disabled = true;
         chatInput.disabled = true;
         btnNextTurn.disabled = true;
-        chatStatus.textContent = 'Processing message…';
+        chatStatus.textContent = 'PROCESSING...';
 
         addMessage('scammer', text.trim());
         conversationHistory.push({ sender: 'scammer', text: text.trim() });
@@ -410,7 +443,6 @@
                 conversationHistory.push({ sender: 'user', text: reply });
                 if (data.session) updateDashboard(data.session);
 
-                // Mark script turn as sent
                 if (matchedScriptIdx !== null) {
                     const prevActive = activeScriptIdx;
                     activeScriptIdx = matchedScriptIdx;
@@ -419,18 +451,18 @@
                     if (scriptsOpen) renderScriptMessages();
                 }
             } else {
-                addMessage('agent', 'Something went wrong on my end…');
+                addMessage('agent', 'System error encountered. Please retry.');
             }
         } catch (err) {
             hideTyping();
-            addMessage('agent', 'Connection error. Please try again.');
+            addMessage('agent', 'CONNECTION ERROR // Please try again.');
         } finally {
             isSending = false;
             btnSend.disabled = false;
             chatInput.disabled = false;
             chatInput.focus();
             updateScriptPanel();
-            if (!sessionComplete) chatStatus.textContent = 'Online • Ready to engage';
+            if (!sessionComplete) chatStatus.textContent = 'ONLINE // READY';
         }
     }
 
@@ -450,9 +482,9 @@
         if (status === 'HONEYPOT') statusBadge.classList.add('honeypot');
         else if (status === 'LEGIT') statusBadge.classList.add('legit');
 
-        scamTypeEl.textContent = session.scamType || '—';
+        scamTypeEl.textContent = session.scamType || '---';
         confidenceLevelEl.textContent = session.confidenceLevel
-            ? `${(parseFloat(session.confidenceLevel) * 100).toFixed(0)}%` : '—';
+            ? `${(parseFloat(session.confidenceLevel) * 100).toFixed(0)}%` : '---';
 
         if (session.intelligence) {
             updateIntelField('phoneNumbers', session.intelligence.phoneNumbers);
@@ -469,19 +501,17 @@
 
         if (session.agentNotes) agentNotes.textContent = session.agentNotes;
 
-        // Show teaser at turn 5
         if (turn >= 5 && turn < max) {
             resultsTeaser.style.display = 'flex';
         }
 
-        // Session complete
         if (turn >= max) {
             sessionComplete = true;
-            chatStatus.textContent = '✅ Session complete — view your full report!';
+            chatStatus.textContent = 'SESSION COMPLETE // VIEW REPORT';
             resultsTrigger.style.display = 'block';
             resultsTeaser.style.display = 'none';
             chatInput.disabled = true;
-            chatInput.placeholder = 'Session complete — click "View Full Intelligence Report" →';
+            chatInput.placeholder = 'Session complete. View Intelligence Report.';
             btnSend.disabled = true;
         }
     }
@@ -512,15 +542,15 @@
     // ================================================================
     async function viewResults() {
         resultsModal.style.display = 'flex';
-        resultsBody.innerHTML = '<div class="loading-spinner">Loading final intelligence report…</div>';
+        resultsBody.innerHTML = '<div class="loading-spinner">LOADING INTELLIGENCE REPORT...</div>';
         try {
             const res = await fetch(`/api/session/${sessionId}/results`);
             const data = await res.json();
             if (data.status === 'success' && data.results) renderResults(data.results);
             else if (data.status === 'pending') resultsBody.innerHTML = `<div class="loading-spinner">${data.message}</div>`;
-            else resultsBody.innerHTML = '<div class="loading-spinner">Could not load results.</div>';
+            else resultsBody.innerHTML = '<div class="loading-spinner">ERROR: Could not load results.</div>';
         } catch {
-            resultsBody.innerHTML = '<div class="loading-spinner">Failed to load results.</div>';
+            resultsBody.innerHTML = '<div class="loading-spinner">CONNECTION ERROR // Failed to load results.</div>';
         }
     }
 
@@ -530,34 +560,46 @@
             if (!arr || arr.length === 0) return '<span class="empty-value">None</span>';
             return `<div class="result-intel-list">${arr.map(v => `<span class="value-chip ${cls}">${escapeHtml(v)}</span>`).join('')}</div>`;
         };
+        const scamDetectedText = r.scamDetected ? 'DETECTED' : 'NOT DETECTED';
+        const scamDetectedColor = r.scamDetected ? 'var(--accent-redline)' : 'var(--accent-green)';
+
         resultsBody.innerHTML = `
             <div class="results-section">
-                <div class="results-section-title">📊 Session Overview</div>
+                <div class="results-section-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+                    SESSION OVERVIEW
+                </div>
                 <div class="results-grid">
-                    <div class="result-item"><div class="result-item-label">Session ID</div><div class="result-item-value highlight">${escapeHtml(r.sessionId || '—')}</div></div>
-                    <div class="result-item"><div class="result-item-label">Scam Detected</div><div class="result-item-value" style="color:${r.scamDetected ? 'var(--accent-red)' : 'var(--accent-emerald)'}">${r.scamDetected ? '🔴 YES' : '🟢 NO'}</div></div>
-                    <div class="result-item"><div class="result-item-label">Scam Type</div><div class="result-item-value">${escapeHtml(r.scamType || '—')}</div></div>
-                    <div class="result-item"><div class="result-item-label">Confidence</div><div class="result-item-value highlight">${r.confidenceLevel != null ? (r.confidenceLevel * 100).toFixed(0) + '%' : '—'}</div></div>
-                    <div class="result-item"><div class="result-item-label">Messages Exchanged</div><div class="result-item-value highlight">${r.totalMessagesExchanged || 0}</div></div>
-                    <div class="result-item"><div class="result-item-label">Engagement Duration</div><div class="result-item-value highlight">${r.engagementDurationSeconds != null ? r.engagementDurationSeconds.toFixed(1) + 's' : '—'}</div></div>
+                    <div class="result-item"><div class="result-item-label">SESSION ID</div><div class="result-item-value highlight">${escapeHtml(r.sessionId || '---')}</div></div>
+                    <div class="result-item"><div class="result-item-label">SCAM STATUS</div><div class="result-item-value" style="color:${scamDetectedColor}">${scamDetectedText}</div></div>
+                    <div class="result-item"><div class="result-item-label">SCAM TYPE</div><div class="result-item-value">${escapeHtml(r.scamType || '---')}</div></div>
+                    <div class="result-item"><div class="result-item-label">CONFIDENCE</div><div class="result-item-value highlight">${r.confidenceLevel != null ? (r.confidenceLevel * 100).toFixed(0) + '%' : '---'}</div></div>
+                    <div class="result-item"><div class="result-item-label">MESSAGES EXCHANGED</div><div class="result-item-value highlight">${r.totalMessagesExchanged || 0}</div></div>
+                    <div class="result-item"><div class="result-item-label">ENGAGEMENT DURATION</div><div class="result-item-value highlight">${r.engagementDurationSeconds != null ? r.engagementDurationSeconds.toFixed(1) + 's' : '---'}</div></div>
                 </div>
             </div>
             <div class="results-section">
-                <div class="results-section-title">📡 Extracted Intelligence</div>
+                <div class="results-section-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    EXTRACTED INTELLIGENCE
+                </div>
                 <div class="results-grid">
-                    <div class="result-item"><div class="result-item-label">📱 Phone Numbers</div>${chips(intel.phoneNumbers)}</div>
-                    <div class="result-item"><div class="result-item-label">🏦 Bank Accounts</div>${chips(intel.bankAccounts)}</div>
-                    <div class="result-item"><div class="result-item-label">💳 UPI IDs</div>${chips(intel.upiIds)}</div>
-                    <div class="result-item"><div class="result-item-label">📧 Emails</div>${chips(intel.emailAddresses)}</div>
-                    <div class="result-item"><div class="result-item-label">🔗 URLs</div>${chips(intel.phishingLinks || intel.urls)}</div>
-                    <div class="result-item"><div class="result-item-label">🏛️ IFSC Codes</div>${chips(intel.ifscCodes)}</div>
-                    <div class="result-item"><div class="result-item-label">🔖 Case IDs</div>${chips(intel.caseIds)}</div>
-                    <div class="result-item"><div class="result-item-label">⚠️ Keywords</div>${chips(intel.suspiciousKeywords, 'keyword')}</div>
+                    <div class="result-item"><div class="result-item-label">PHONE NUMBERS</div>${chips(intel.phoneNumbers)}</div>
+                    <div class="result-item"><div class="result-item-label">BANK ACCOUNTS</div>${chips(intel.bankAccounts)}</div>
+                    <div class="result-item"><div class="result-item-label">UPI IDS</div>${chips(intel.upiIds)}</div>
+                    <div class="result-item"><div class="result-item-label">EMAILS</div>${chips(intel.emailAddresses)}</div>
+                    <div class="result-item"><div class="result-item-label">URLS</div>${chips(intel.phishingLinks || intel.urls)}</div>
+                    <div class="result-item"><div class="result-item-label">IFSC CODES</div>${chips(intel.ifscCodes)}</div>
+                    <div class="result-item"><div class="result-item-label">CASE IDS</div>${chips(intel.caseIds)}</div>
+                    <div class="result-item"><div class="result-item-label">KEYWORDS</div>${chips(intel.suspiciousKeywords, 'keyword')}</div>
                 </div>
             </div>
             <div class="results-section">
-                <div class="results-section-title">📝 Agent Notes</div>
-                <div class="result-notes">${escapeHtml(r.agentNotes || 'No notes.')}</div>
+                <div class="results-section-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                    AGENT NOTES
+                </div>
+                <div class="result-notes">${escapeHtml(r.agentNotes || 'No notes recorded.')}</div>
             </div>`;
     }
 
@@ -588,7 +630,7 @@
         if (!sessionId) return;
         navigator.clipboard.writeText(sessionId).catch(() => { });
         const orig = sessionIdValue.textContent;
-        sessionIdValue.textContent = 'Copied!';
+        sessionIdValue.textContent = 'COPIED';
         setTimeout(() => { sessionIdValue.textContent = orig; }, 1200);
     });
 
@@ -601,6 +643,7 @@
     // ================================================================
     // Bootstrap
     // ================================================================
+    initCursorTracker();
     buildScriptsPanel();
     initSession();
 })();

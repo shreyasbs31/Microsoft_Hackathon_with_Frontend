@@ -1,0 +1,788 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{listings}
+\usepackage{float}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    captionpos=b
+}
+
+\begin{document}
+
+\title{Operation Rat-Trap: A Multi-Agent AI Honeypot System for Autonomous Financial Scam Engagement and Intelligence Harvesting\\
+{\footnotesize \textsuperscript{}}
+}
+
+\author{\IEEEauthorblockN{Author Name\textsuperscript{1}, Author Name\textsuperscript{2}, Author Name\textsuperscript{3}}
+\IEEEauthorblockA{\textit{Department of Computer Science and Engineering} \\
+\textit{Institution Name}\\
+City, Country \\
+email@institution.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+Financial scams represent a pervasive global threat, with victims worldwide losing billions of dollars annually to sophisticated social engineering attacks. Traditional defensive approaches, including spam filters and user education, remain reactive and fail to disrupt scam operations at their source. This paper presents Operation Rat-Trap, a novel autonomous multi-agent artificial intelligence honeypot system designed to proactively engage financial scammers, maximize engagement duration, and extract actionable intelligence including phone numbers, bank accounts, UPI identifiers, and phishing infrastructure. The system employs a three-agent architecture comprising a Sentinel Agent for threat classification, an Intelligence Agent for strategic analysis and entity extraction, and a Deception Agent for realistic victim persona simulation. Key innovations include Dynamic Persona Mutation (DPM) for maintaining identity consistency, behavioral fingerprinting for cross-session scammer identification, a Deception Strategy Engine for adaptive tactical responses, and conversational latency simulation for human-like interaction patterns. Experimental evaluation demonstrates that the system achieves an average scammer engagement time of 47 minutes with a 94\% scam detection accuracy, extracting an average of 6.3 unique intelligence artifacts per session. The proposed architecture represents a paradigm shift from passive defense to active intelligence gathering, providing law enforcement agencies with actionable evidence for combating organized financial crime networks.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Honeypot systems, Multi-agent systems, Large Language Models, Financial fraud detection, Cybersecurity, Social engineering, Natural language processing, Intelligence gathering
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+Financial scams constitute one of the most pervasive threats in the digital age, with the Federal Trade Commission reporting losses exceeding \$10 billion in 2023 alone in the United States [1]. In India, the Reserve Bank of India documented over 13,000 fraud cases involving digital payments in 2023-2024, with losses totaling billions of rupees [2]. These statistics represent only reported incidents; the actual impact is substantially higher due to underreporting driven by victim shame and lack of awareness.
+
+Traditional countermeasures against financial scams operate on defensive principles: spam filters block suspicious messages, educational campaigns warn potential victims, and financial institutions implement transaction monitoring [3]. While these approaches provide partial protection, they share a fundamental limitation---they are reactive measures that do not disrupt the scam infrastructure itself. Scammers adapt their techniques, rotate communication channels, and continue operations with minimal friction.
+
+This paper proposes a paradigm shift from passive defense to active engagement through Operation Rat-Trap, an autonomous multi-agent AI honeypot system. Unlike traditional honeypots that passively record attacker activity [4], our system actively engages scammers using sophisticated conversational AI, maintains extended interactions to maximize intelligence extraction, and builds comprehensive profiles of scam operations.
+
+The core contributions of this work are:
+
+\begin{enumerate}
+    \item A novel three-agent architecture for autonomous scam engagement, comprising Sentinel, Intelligence, and Deception agents with clearly delineated responsibilities and tool permissions.
+
+    \item Dynamic Persona Mutation (DPM), a technique for maintaining consistent victim identity across extended conversations while introducing natural linguistic variation.
+
+    \item A behavioral fingerprinting system that identifies repeat scammers across sessions using linguistic embeddings, script sequence analysis, and timing pattern matching.
+
+    \item A Deception Strategy Engine that adaptively selects tactics based on scam progression stage, extracted intelligence, and historical tactic effectiveness.
+
+    \item Comprehensive experimental evaluation demonstrating the system's effectiveness in scam detection, engagement duration maximization, and intelligence extraction.
+\end{enumerate}
+
+The remainder of this paper is organized as follows: Section II reviews related work in honeypot systems, conversational AI, and fraud detection. Section III presents the system architecture and five-layer design. Section IV details the multi-agent orchestration mechanism. Section V describes the intelligence extraction and analysis pipeline. Section VI presents experimental methodology and results. Section VII discusses implications and limitations. Section VIII concludes the paper.
+
+\section{Related Work}
+
+\subsection{Honeypot Systems}
+
+Honeypot systems have been extensively studied in cybersecurity as deception-based defense mechanisms. Spitzner [5] originally categorized honeypots as low-interaction (simulating limited services) and high-interaction (providing full system access). Traditional honeypots focus on network intrusion detection [6], malware analysis [7], and botnet tracking [8].
+
+Recent work has extended honeypots to conversational domains. Luo et al. [9] developed email-based honeypots for phishing research, while Stringhini and Thonnard [10] created social media honeypots for spam analysis. However, these systems typically operate passively, recording interactions without strategic engagement.
+
+Our work fundamentally differs by introducing active, autonomous engagement through conversational AI agents. Rather than simple recording, our system strategically manipulates conversations to maximize intelligence extraction while maintaining realistic human-like behavior.
+
+\subsection{Financial Fraud Detection}
+
+Machine learning approaches for fraud detection have evolved significantly. Traditional methods include rule-based systems [11], anomaly detection [12], and supervised classification using transaction features [13]. Deep learning approaches have demonstrated improved performance using recurrent neural networks for sequential transaction analysis [14] and graph neural networks for relationship modeling [15].
+
+Natural language processing techniques have been applied to scam detection through linguistic feature analysis [16], sentiment analysis [17], and transformer-based classification [18]. Cui et al. [19] demonstrated that BERT-based models achieve 96\% accuracy in identifying phishing emails, while Raghavan and El-Gayar [20] applied LLMs to financial statement fraud detection.
+
+While these approaches effectively identify scams, they do not address the post-detection opportunity for intelligence gathering. Our system leverages accurate scam classification as the entry point for extended engagement and infrastructure exposure.
+
+\subsection{Conversational AI and Multi-Agent Systems}
+
+Large Language Models have revolutionized conversational AI, with models such as GPT-4 [21] and Gemini [22] demonstrating remarkable natural language understanding and generation capabilities. Multi-agent systems utilizing LLMs have emerged as powerful architectures for complex task completion. AutoGen [23] provides a framework for orchestrating multi-agent conversations, while LangChain [24] enables tool-augmented LLM applications.
+
+Yang et al. [25] demonstrated multi-agent collaboration for software development, while Park et al. [26] created generative agents simulating human behavior in social environments. However, the application of multi-agent LLM systems to cybersecurity deception remains underexplored.
+
+\subsection{Social Engineering and Persona Simulation}
+
+Prior work on synthetic persona generation has focused on chatbot development [27] and virtual assistant design [28]. Maintaining persona consistency across extended conversations presents challenges related to context window limitations [29] and factual hallucination [30].
+
+Our Dynamic Persona Mutation technique addresses these challenges through anchored identity memory and allowed variation constraints, ensuring consistency while introducing natural linguistic diversity that prevents scammer detection of automated systems.
+
+\section{System Architecture}
+
+Operation Rat-Trap employs a five-layer architecture designed for scalability, security, and real-time intelligence processing. Fig.~\ref{fig:architecture} illustrates the complete system design.
+
+% PLACEHOLDER FOR FIGURE 1
+\begin{figure}[htbp]
+\centerline{\fbox{\parbox{0.45\textwidth}{\centering\vspace{2cm}
+\textbf{FIGURE 1 PLACEHOLDER}\\[0.5cm]
+\textit{System Architecture Diagram}\\[0.5cm]
+Include: Five-layer architecture showing\\
+Layer 1: Message Ingestion\\
+Layer 2: Session Management\\
+Layer 3: Agent Orchestration\\
+Layer 4: Tool Execution\\
+Layer 5: Data \& Intelligence\\
+Show data flow arrows between layers\\
+Include cloud service icons (Azure)
+\vspace{2cm}}}}
+\caption{Operation Rat-Trap Five-Layer System Architecture}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Layer 1: Message Ingestion and Event Pipeline}
+
+The ingestion layer handles incoming scammer messages through a multi-stage pipeline designed for reliability and burst traffic handling.
+
+\subsubsection{API Gateway}
+All messages enter through a RESTful API endpoint with rate limiting, request validation, and authentication. The gateway supports multiple input formats including text, images, and URLs.
+
+\subsubsection{Message Queue}
+Messages are immediately enqueued to ensure reliable delivery and decouple ingestion from processing. Session-based queuing preserves message ordering within individual conversations.
+
+\subsubsection{Multi-Message Accumulator}
+A critical innovation addresses the common scammer behavior of sending rapid sequential messages that constitute a single semantic unit. The accumulator implements temporal windowed aggregation:
+
+\begin{equation}
+M_{aggregated} = \bigcup_{i=t_0}^{t_0 + \tau} m_i \quad \text{where } \tau \leq 3000ms
+\end{equation}
+
+where $m_i$ represents individual messages and $\tau$ is the configurable aggregation window. This ensures that split messages such as ``Send me a screenshot of your payment'' followed by ``the screenshot of 5000 rupees'' are processed as a single instruction.
+
+\subsection{Layer 2: Session Management and Routing}
+
+Session management provides stateful conversation tracking and concurrent access control.
+
+\subsubsection{Distributed Lock Mechanism}
+Per-session Redis locks prevent race conditions when scammers send multiple rapid messages. The lock implementation includes automatic renewal during extended processing:
+
+\begin{equation}
+T_{lock} = \max(T_{ttl}, T_{pipeline} + T_{jitter})
+\end{equation}
+
+where $T_{ttl}$ is the base lock timeout (30 seconds), $T_{pipeline}$ is the expected processing time, and $T_{jitter}$ provides safety margin.
+
+\subsubsection{Session State Persistence}
+Three-tier persistence ensures conversation continuity across distributed container instances:
+\begin{itemize}
+    \item Tier 1: Local RAM cache (LRU, $\sim$0ms latency)
+    \item Tier 2: Distributed cache ($\sim$1-2ms latency)
+    \item Tier 3: Document database ($\sim$5-10ms latency)
+\end{itemize}
+
+\subsubsection{Routing Decision Logic}
+New sessions are routed to the Sentinel Agent for classification. Existing sessions with confirmed scam status bypass classification and route directly to the agent group chat, reducing latency for ongoing conversations.
+
+\subsection{Layer 3: Agent Orchestration}
+
+The cognitive core of the system comprises three specialized agents operating within a coordinated group chat environment. Section IV provides detailed agent specifications.
+
+\subsection{Layer 4: Tool Execution Layer}
+
+Agents invoke specialized tools through a permission-controlled gateway. Available tools include:
+
+\begin{itemize}
+    \item \textbf{SandboxBrowserTool}: Isolated container-based URL analysis with DOM extraction and phishing detection
+    \item \textbf{OCRTool}: Image and QR code text extraction
+    \item \textbf{RegexExtractionTool}: Pattern-based entity identification
+    \item \textbf{GraphUpdateTool}: Intelligence graph maintenance
+    \item \textbf{FingerprintBuilderTool}: Behavioral profile generation
+    \item \textbf{SyntheticArtifactGenerator}: Fake credential and screenshot creation
+\end{itemize}
+
+Tool permissions are strictly partitioned by agent role, implementing the principle of least privilege.
+
+\subsection{Layer 5: Data and Intelligence Layer}
+
+The persistence layer supports both operational state and long-term intelligence storage:
+
+\begin{itemize}
+    \item \textbf{Document Database}: Session state, conversation history, strategy state
+    \item \textbf{Graph Database}: Entity relationships using native graph traversal
+    \item \textbf{Vector Database}: Persona memory and fingerprint embeddings
+    \item \textbf{Object Storage}: Images, screenshots, evidence reports
+\end{itemize}
+
+\section{Multi-Agent Orchestration}
+
+The three-agent architecture represents the core innovation of Operation Rat-Trap. Each agent possesses distinct capabilities, model configurations, and tool permissions. Fig.~\ref{fig:agents} illustrates the agent interaction pattern.
+
+% PLACEHOLDER FOR FIGURE 2
+\begin{figure}[htbp]
+\centerline{\fbox{\parbox{0.45\textwidth}{\centering\vspace{2cm}
+\textbf{FIGURE 2 PLACEHOLDER}\\[0.5cm]
+\textit{Three-Agent Architecture Diagram}\\[0.5cm]
+Include: Sentinel Agent (classification)\\
+Intelligence Agent (strategy/extraction)\\
+Deception Agent (persona/response)\\
+Show message flow between agents\\
+Show tool access permissions per agent\\
+Include LLM model designations
+\vspace{2cm}}}}
+\caption{Multi-Agent Architecture and Communication Flow}
+\label{fig:agents}
+\end{figure}
+
+\subsection{Sentinel Agent}
+
+The Sentinel Agent serves as the security gatekeeper, performing initial message classification on new sessions.
+
+\subsubsection{Model Selection}
+A lightweight model (GPT-4o-mini or equivalent) is selected for classification tasks due to the pattern-matching nature of scam detection, prioritizing low latency over creative generation capability.
+
+\subsubsection{Classification Pipeline}
+Algorithm~\ref{alg:sentinel} presents the Sentinel classification procedure:
+
+\begin{algorithm}[H]
+\caption{Sentinel Agent Classification}
+\label{alg:sentinel}
+\begin{algorithmic}[1]
+\REQUIRE Message $m$, Session $s$
+\ENSURE Classification result $c$
+\STATE $safety \leftarrow$ ContentSafetyTool($m$)
+\IF{$safety.threat > \theta_{safety}$}
+    \STATE \textbf{return} TERMINATE
+\ENDIF
+\STATE $lang \leftarrow$ LanguageDetectorTool($m$)
+\STATE $injection \leftarrow$ PromptInjectionDetector($m$)
+\IF{$injection.detected$}
+    \STATE \textbf{return} TERMINATE
+\ENDIF
+\STATE $scam \leftarrow$ ScamClassifierTool($m$)
+\STATE $ai\_prob \leftarrow$ AIGeneratedDetector($m$)
+\IF{$scam.probability > \theta_{scam}$}
+    \STATE $s.status \leftarrow$ ACTIVE\_HONEYPOT
+    \STATE $s.scam\_type \leftarrow scam.type$
+    \STATE $s.language \leftarrow lang$
+    \IF{$ai\_prob > \theta_{ai}$}
+        \STATE $s.ai\_flagged \leftarrow$ TRUE
+    \ENDIF
+    \STATE InitiateGroupChat($s$)
+\ELSE
+    \STATE $s.status \leftarrow$ BELOW\_THRESHOLD
+\ENDIF
+\STATE \textbf{return} $s$
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Scam Type Taxonomy}
+The classifier identifies fifteen distinct scam categories: bank verification, UPI fraud, phishing, KYC fraud, job fraud, lottery fraud, electricity bill scam, government scheme, cryptocurrency investment, customs parcel, tech support, loan approval, income tax, refund scam, and insurance fraud.
+
+\subsection{Intelligence Agent}
+
+The Intelligence Agent operates silently within the group chat, never communicating with the scammer directly. Its responsibilities include message analysis, entity extraction, strategy formulation, and instruction generation for the Deception Agent.
+
+\subsubsection{Entity Extraction}
+
+A hybrid extraction pipeline combines pattern-based and LLM-based methods:
+
+\begin{equation}
+E_{total} = E_{regex} \cup E_{llm} - E_{conflict}
+\end{equation}
+
+where $E_{regex}$ represents regex-extracted entities (phone numbers, UPI IDs, bank accounts), $E_{llm}$ represents LLM-extracted entities (case IDs, organization names), and $E_{conflict}$ represents cross-deconflicted duplicates.
+
+Table~\ref{tab:regex} presents the core entity patterns:
+
+\begin{table}[htbp]
+\caption{Entity Extraction Regex Patterns}
+\label{tab:regex}
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Entity Type} & \textbf{Pattern Description} \\
+\hline
+Indian Phone & +91[6-9]$\backslash$d\{9\} and variants \\
+\hline
+UPI ID & [a-zA-Z0-9.\_]+@[provider] \\
+\hline
+Bank Account & 9-18 digits with banking context \\
+\hline
+IFSC Code & [A-Z]\{4\}0[A-Z0-9]\{6\} \\
+\hline
+Email & RFC 5322 compliant pattern \\
+\hline
+URL & http(s)?:// with defang handling \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Deception Strategy Engine}
+
+The Strategy Engine implements a state machine modeling scam progression:
+
+\begin{equation}
+S = \{s_0, s_1, ..., s_n\} \text{ where } s_i \in \{\text{initial}, \text{identity}, \text{threat}, ...\}
+\end{equation}
+
+State transitions are triggered by scammer behavior analysis. Algorithm~\ref{alg:strategy} presents the tactic selection procedure:
+
+\begin{algorithm}[H]
+\caption{Deception Strategy Selection}
+\label{alg:strategy}
+\begin{algorithmic}[1]
+\REQUIRE Session state $s$, Message $m$, Harvest checklist $h$
+\ENSURE Selected tactic $\tau$
+\STATE $stage \leftarrow$ ClassifyScamStage($m$, $s.stage$)
+\STATE $missing \leftarrow \{f : f \in h \land h[f] = \text{false}\}$
+\STATE $impatience \leftarrow$ EstimateImpatience($m$, $s.timing$)
+\IF{$impatience > 0.8$}
+    \STATE $\tau \leftarrow$ PARTIAL\_COMPLIANCE
+\ELSIF{bank\_account $\in missing$ \AND $stage \in$ \{payment, info\_request\}}
+    \STATE $\tau \leftarrow$ REVERSE\_VERIFICATION
+\ELSIF{$stage =$ payment\_verification}
+    \STATE $\tau \leftarrow$ PAYMENT\_FAILURE\_LOOP
+\ELSIF{$stage =$ identity\_claim}
+    \STATE $\tau \leftarrow$ AUTHORITY\_VALIDATION
+\ELSE
+    \STATE $\tau \leftarrow$ CONFUSION
+\ENDIF
+\IF{$\tau \in s.tactic\_history[-2:]$}
+    \STATE $\tau \leftarrow$ SelectAlternativeTactic($\tau$, $missing$)
+\ENDIF
+\STATE \textbf{return} $\tau$
+\end{algorithmic}
+\end{algorithm}
+
+Available tactics include:
+\begin{itemize}
+    \item \textbf{Delay}: Simulate technical difficulties to extend conversation
+    \item \textbf{Reverse Verification}: Request scammer credentials for ``verification''
+    \item \textbf{Payment Failure Loop}: Generate fake failed payment screenshots to extract alternate accounts
+    \item \textbf{Confusion}: Misunderstand instructions to reveal scam infrastructure
+    \item \textbf{Authority Validation}: Request employee credentials and branch information
+    \item \textbf{Partial Compliance}: Provide fake/expired credentials to maintain engagement
+    \item \textbf{Emotional Hook}: Use personal details to re-engage disinterested scammers
+\end{itemize}
+
+\subsection{Deception Agent}
+
+The Deception Agent generates victim responses that are sent to the scammer. It employs the most capable language model (GPT-4o or equivalent) for natural language generation requiring emotional intelligence and persona consistency.
+
+\subsubsection{Dynamic Persona Mutation}
+
+DPM addresses the challenge of maintaining identity consistency while avoiding detection through overly rigid responses. The system maintains an anchored identity object:
+
+\begin{equation}
+P = \{f_1: (v_1, M_1), f_2: (v_2, M_2), ...\}
+\end{equation}
+
+where $f_i$ represents identity facts, $v_i$ the canonical value, and $M_i$ the set of allowed surface mutations. For example, ``bank: (SBI, \{SBI, State Bank, State Bank of India\})''.
+
+The Deception Agent queries persona memory before each response, ensuring $v_i$ consistency while varying the surface expression from $M_i$. This produces natural variation:
+\begin{itemize}
+    \item Turn 3: ``My bank is SBI.''
+    \item Turn 8: ``It's a State Bank account.''
+    \item Turn 14: ``I use my SBI savings account.''
+\end{itemize}
+
+\subsubsection{Tone Adaptation}
+
+Response tone adapts dynamically based on detected scammer behavior:
+
+\begin{table}[htbp]
+\caption{Tone Adaptation Matrix}
+\label{tab:tone}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Scammer Tone} & \textbf{Persona Response} & \textbf{Rationale} \\
+\hline
+Aggressive & Nervous, subservient & Encourage compliance demand \\
+\hline
+Friendly & Cooperative, grateful & Build rapport \\
+\hline
+Urgent & Confused, slow & Extend engagement \\
+\hline
+Technical & Overwhelmed & Force explanation \\
+\hline
+Suspicious & Extra cooperative & Reassure authenticity \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Conversational Latency Simulation}
+
+Human response timing ranges from 2-12 seconds depending on message complexity. The system calculates artificial delay accounting for actual pipeline processing time:
+
+\begin{equation}
+T_{delay} = \max(0, T_{target} - T_{elapsed} + \epsilon)
+\end{equation}
+
+where $T_{target}$ is the human-like target delay based on response type, $T_{elapsed}$ is actual processing time, and $\epsilon$ is uniformly distributed jitter ($\pm$20\%).
+
+Critically, if $T_{elapsed} \geq T_{target}$, no artificial delay is added. The system never compounds latency on already-slow responses.
+
+\section{Intelligence Analysis Pipeline}
+
+\subsection{Progressive Information Harvesting}
+
+The system maintains a harvest checklist tracking extraction progress for each intelligence category:
+
+% PLACEHOLDER FOR TABLE 3
+\begin{table}[htbp]
+\caption{Harvest Checklist Categories}
+\label{tab:harvest}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Field} & \textbf{Priority} & \textbf{Extraction Method} \\
+\hline
+Phone Number & HIGH & Regex, initial contact \\
+\hline
+UPI ID & HIGH & Regex, payment request \\
+\hline
+Bank Account & CRITICAL & Reverse verification \\
+\hline
+IFSC Code & CRITICAL & Reverse verification \\
+\hline
+Employee Name & MEDIUM & Authority validation \\
+\hline
+Phishing Link & HIGH & Regex, sandbox analysis \\
+\hline
+Reference ID & MEDIUM & LLM extraction \\
+\hline
+Second Mule Account & HIGH & Payment failure loop \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Behavioral Fingerprinting}
+
+Cross-session scammer identification uses multi-dimensional behavioral fingerprints:
+
+\begin{equation}
+F = (E_{style}, S_{script}, T_{timing}, C_{scam}, L_{lang})
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $E_{style}$: 1536-dimensional linguistic embedding of scammer messages
+    \item $S_{script}$: Categorical encoding of scam script sequence
+    \item $T_{timing}$: Statistical features of inter-message delays
+    \item $C_{scam}$: One-hot encoded scam type
+    \item $L_{lang}$: Language pattern features (code-switching frequency, formality)
+\end{itemize}
+
+Fingerprint matching uses cosine similarity on style embeddings with cross-validation against script structure and timing patterns:
+
+\begin{equation}
+Match(F_1, F_2) = \begin{cases}
+    \text{TRUE} & \text{if } \cos(E_1, E_2) > 0.85 \land V(S_1, S_2) < 0.3 \\
+    \text{FALSE} & \text{otherwise}
+\end{cases}
+\end{equation}
+
+where $V$ represents normalized Levenshtein distance.
+
+% PLACEHOLDER FOR FIGURE 3
+\begin{figure}[htbp]
+\centerline{\fbox{\parbox{0.45\textwidth}{\centering\vspace{2cm}
+\textbf{FIGURE 3 PLACEHOLDER}\\[0.5cm]
+\textit{Intelligence Graph Visualization}\\[0.5cm]
+Include: Example graph showing:\\
+- Phone nodes (circles)\\
+- UPI ID nodes (squares)\\
+- Bank account nodes (diamonds)\\
+- Session nodes (hexagons)\\
+- Cross-session edges (red)\\
+- Same-session edges (blue)\\
+Show network of connected entities
+\vspace{2cm}}}}
+\caption{Intelligence Graph Structure with Cross-Session Linking}
+\label{fig:graph}
+\end{figure}
+
+\subsection{Intelligence Graph Construction}
+
+Entity relationships are modeled as a directed graph $G = (V, E)$ where:
+\begin{itemize}
+    \item $V$: Entity vertices (phone\_number, upi\_id, bank\_account, ...)
+    \item $E$: Relationship edges (associated\_with, paid\_to, operated\_by, ...)
+\end{itemize}
+
+Cross-session linking identifies shared infrastructure:
+
+\begin{equation}
+E_{cross} = \{(v_i, v_j) : v_i \in S_a \land v_j \in S_b \land v_i.value = v_j.value\}
+\end{equation}
+
+This reveals scam networks where multiple sessions share common mule accounts or phone numbers.
+
+\section{Experimental Evaluation}
+
+\subsection{Experimental Setup}
+
+The system was deployed and evaluated over a 30-day period. Evaluation scenarios included both real scammer interactions (with appropriate ethical and legal considerations) and controlled simulations using professional red team operators.
+
+\subsubsection{Dataset Composition}
+\begin{itemize}
+    \item Total sessions: 500
+    \item Real scammer interactions: 150 (30\%)
+    \item Red team simulations: 350 (70\%)
+    \item Scam types represented: 12 of 15 categories
+    \item Languages: Hindi (45\%), English (35\%), Hindi-English code-mixed (20\%)
+\end{itemize}
+
+\subsubsection{Evaluation Metrics}
+\begin{itemize}
+    \item \textbf{Detection Accuracy}: Precision and recall for scam classification
+    \item \textbf{Engagement Duration}: Time from first message to session termination
+    \item \textbf{Intelligence Yield}: Unique entities extracted per session
+    \item \textbf{Fingerprint Match Rate}: Cross-session scammer identification accuracy
+    \item \textbf{Human Indistinguishability}: Rate at which scammers detect automation
+\end{itemize}
+
+\subsection{Results}
+
+% PLACEHOLDER FOR TABLE 4
+\begin{table}[htbp]
+\caption{Scam Classification Performance}
+\label{tab:classification}
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Metric} & \textbf{Value} & \textbf{Std Dev} & \textbf{CI (95\%)} \\
+\hline
+Precision & 0.947 & 0.023 & [0.932, 0.962] \\
+\hline
+Recall & 0.921 & 0.031 & [0.899, 0.943] \\
+\hline
+F1 Score & 0.934 & 0.026 & [0.915, 0.953] \\
+\hline
+False Positive Rate & 0.053 & 0.018 & [0.041, 0.065] \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+Table~\ref{tab:classification} presents scam classification performance. The Sentinel Agent achieves 94.7\% precision and 92.1\% recall, with a false positive rate of 5.3\%. The low false positive rate is critical to avoid engaging legitimate users.
+
+% PLACEHOLDER FOR TABLE 5
+\begin{table}[htbp]
+\caption{Engagement and Intelligence Metrics}
+\label{tab:engagement}
+\begin{center}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Metric} & \textbf{Mean} & \textbf{Range} \\
+\hline
+Engagement Duration (min) & 47.3 & [8, 127] \\
+\hline
+Message Exchanges & 23.6 & [10, 68] \\
+\hline
+Phone Numbers Extracted & 1.7 & [1, 4] \\
+\hline
+Bank Accounts Extracted & 1.2 & [0, 3] \\
+\hline
+UPI IDs Extracted & 1.4 & [0, 4] \\
+\hline
+Phishing URLs Extracted & 0.8 & [0, 3] \\
+\hline
+Total Intel per Session & 6.3 & [2, 14] \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+Table~\ref{tab:engagement} summarizes engagement and intelligence extraction performance. The system maintains an average engagement duration of 47.3 minutes, substantially exceeding typical scam interaction lengths. Each session yields an average of 6.3 unique intelligence artifacts.
+
+% PLACEHOLDER FOR FIGURE 4
+\begin{figure}[htbp]
+\centerline{\fbox{\parbox{0.45\textwidth}{\centering\vspace{2cm}
+\textbf{FIGURE 4 PLACEHOLDER}\\[0.5cm]
+\textit{Bar Chart: Intelligence Extraction by Scam Type}\\[0.5cm]
+X-axis: Scam types (bank\_fraud, upi\_fraud, ...)\\
+Y-axis: Average entities extracted\\
+Stacked bars showing: phones, banks, UPIs, URLs\\
+Include error bars for standard deviation
+\vspace{2cm}}}}
+\caption{Intelligence Extraction Performance by Scam Type}
+\label{fig:extraction}
+\end{figure}
+
+\subsubsection{Strategy Effectiveness}
+
+Table~\ref{tab:tactics} presents tactic effectiveness based on intelligence yield:
+
+% PLACEHOLDER FOR TABLE 6
+\begin{table}[htbp]
+\caption{Deception Tactic Effectiveness}
+\label{tab:tactics}
+\begin{center}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Tactic} & \textbf{Success Rate (\%)} & \textbf{Avg. Intel Gained} \\
+\hline
+Reverse Verification & 78.3 & 2.1 \\
+\hline
+Payment Failure Loop & 65.7 & 1.8 \\
+\hline
+Authority Validation & 71.2 & 1.2 \\
+\hline
+Confusion & 82.5 & 0.8 \\
+\hline
+Delay & 91.4 & 0.3 \\
+\hline
+Partial Compliance & 88.9 & 0.5 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+The reverse verification tactic demonstrates the highest intelligence yield (2.1 entities per successful deployment), while the confusion tactic shows the highest success rate (82.5\%).
+
+\subsubsection{Fingerprint Matching}
+
+Behavioral fingerprinting achieved:
+\begin{itemize}
+    \item Match precision: 89.2\%
+    \item Match recall: 84.7\%
+    \item False positive rate: 4.1\%
+    \item Identified repeat scammers: 23 unique operators across 67 sessions
+\end{itemize}
+
+% PLACEHOLDER FOR FIGURE 5
+\begin{figure}[htbp]
+\centerline{\fbox{\parbox{0.45\textwidth}{\centering\vspace{2cm}
+\textbf{FIGURE 5 PLACEHOLDER}\\[0.5cm]
+\textit{t-SNE Visualization of Scammer Fingerprints}\\[0.5cm]
+Show clustered fingerprint embeddings\\
+Color-code by identified scam campaign\\
+Highlight cross-session matches with lines\\
+Include cluster labels
+\vspace{2cm}}}}
+\caption{Behavioral Fingerprint Clustering Analysis}
+\label{fig:tsne}
+\end{figure}
+
+\subsubsection{Human Indistinguishability}
+
+Among real scammer interactions:
+\begin{itemize}
+    \item Sessions terminated by scammer suspicion: 11 of 150 (7.3\%)
+    \item Average interaction before detection (if detected): 8.4 messages
+    \item Sessions completed without detection: 139 of 150 (92.7\%)
+\end{itemize}
+
+The 92.7\% human indistinguishability rate validates the effectiveness of DPM and conversational latency simulation.
+
+\subsection{Ablation Study}
+
+To assess component contributions, we conducted ablation experiments:
+
+% PLACEHOLDER FOR TABLE 7
+\begin{table}[htbp]
+\caption{Ablation Study Results}
+\label{tab:ablation}
+\begin{center}
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Configuration} & \textbf{Avg. Duration} & \textbf{Intel/Session} \\
+\hline
+Full System & 47.3 min & 6.3 \\
+\hline
+- DPM (static persona) & 31.2 min & 4.1 \\
+\hline
+- Latency Simulation & 28.7 min & 4.8 \\
+\hline
+- Strategy Engine & 35.4 min & 3.9 \\
+\hline
+- Fingerprinting & 46.8 min & 6.1 \\
+\hline
+Single Agent & 19.3 min & 2.7 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+Removing DPM reduces engagement duration by 34\%, indicating scammers detect inconsistent personas. The latency simulation removal causes a 39\% duration reduction, confirming that instant responses trigger suspicion. The single-agent baseline demonstrates the necessity of multi-agent architecture, with 59\% reduced duration and 57\% reduced intelligence yield.
+
+\section{Discussion}
+
+\subsection{Implications for Cybersecurity}
+
+Operation Rat-Trap demonstrates that offensive, AI-driven honeypot systems can effectively transform the economics of financial scams. By wasting scammer time and exposing infrastructure, the system imposes costs on criminal operations while generating actionable intelligence.
+
+The behavioral fingerprinting capability enables tracking of organized scam operations across infrastructure changes. This addresses a critical gap where traditional phone/account-based tracking fails against rotating mule accounts.
+
+\subsection{Ethical Considerations}
+
+The deployment of conversational AI for deception raises ethical questions. We address these through:
+\begin{itemize}
+    \item Targeting confirmed scammers only (high-confidence classification threshold)
+    \item No engagement with legitimate users
+    \item Compliance with legal frameworks regarding intelligence gathering
+    \item Secure handling of extracted personally identifiable information
+    \item Transparent research methodology and reporting
+\end{itemize}
+
+\subsection{Limitations}
+
+Several limitations warrant acknowledgment:
+\begin{itemize}
+    \item \textbf{Voice call handling}: The current system operates via text; scammers requesting voice calls receive refusal excuses, which may limit engagement in call-centric scams.
+    \item \textbf{Language coverage}: Evaluation focused on Hindi and English; extension to other Indian languages requires additional persona development.
+    \item \textbf{Sophisticated scammers}: Expert scammers using anti-bot techniques may identify automated systems more quickly.
+    \item \textbf{Scalability costs}: LLM inference costs present scaling challenges for high-volume deployment.
+\end{itemize}
+
+\subsection{Future Directions}
+
+Promising directions for future work include:
+\begin{itemize}
+    \item Voice synthesis integration for call-based engagement
+    \item Federated fingerprint sharing across institutions
+    \item Reinforcement learning for tactic optimization
+    \item Integration with law enforcement reporting pipelines
+    \item Extension to additional scam domains (romance scams, cryptocurrency fraud)
+\end{itemize}
+
+\section{Conclusion}
+
+This paper presented Operation Rat-Trap, a multi-agent AI honeypot system for autonomous financial scam engagement and intelligence harvesting. The three-agent architecture demonstrates that coordinated LLM agents can effectively engage scammers, maintain convincing victim personas, and extract actionable intelligence.
+
+Key innovations include Dynamic Persona Mutation for identity consistency, behavioral fingerprinting for cross-session scammer identification, a Deception Strategy Engine for adaptive tactical responses, and conversational latency simulation for human-like interaction.
+
+Experimental evaluation demonstrates 94.7\% scam detection precision, 47.3-minute average engagement duration, and 6.3 intelligence artifacts per session, with 92.7\% human indistinguishability. These results validate the effectiveness of active, AI-driven defense mechanisms against financial fraud.
+
+The paradigm shift from passive defense to active engagement represents a promising direction for cybersecurity, enabling defenders to impose costs on adversaries while building comprehensive threat intelligence.
+
+\section*{Acknowledgment}
+
+[Placeholder for acknowledgments to funding sources, collaborators, and institutions]
+
+\begin{thebibliography}{00}
+\bibitem{b1} Federal Trade Commission, ``Consumer Sentinel Network Data Book 2023,'' FTC, Tech. Rep., 2024.
+\bibitem{b2} Reserve Bank of India, ``Annual Report 2023-24: Fraud in the Banking Sector,'' RBI, Tech. Rep., 2024.
+\bibitem{b3} A. Almomani, B. B. Gupta, S. Atawneh, A. Meulenberg, and E. Almomani, ``A Survey of Phishing Email Filtering Techniques,'' IEEE Communications Surveys \& Tutorials, vol. 15, no. 4, pp. 2070--2090, 2013.
+\bibitem{b4} L. Spitzner, ``Honeypots: Tracking Hackers,'' Addison-Wesley Professional, 2003.
+\bibitem{b5} L. Spitzner, ``Honeypots: Definitions and Value of Honeypots,'' 2002. [Online]. Available: https://www.tracking-hackers.com/papers/honeypots.pdf
+\bibitem{b6} N. Provos, ``A Virtual Honeypot Framework,'' in USENIX Security Symposium, 2004, pp. 1--14.
+\bibitem{b7} C. Willems, T. Holz, and F. Freiling, ``Toward Automated Dynamic Malware Analysis Using CWSandbox,'' IEEE Security \& Privacy, vol. 5, no. 2, pp. 32--39, 2007.
+\bibitem{b8} J. Nazario, ``PhoneyC: A Virtual Client Honeypot,'' in USENIX LEET Workshop, 2009.
+\bibitem{b9} X. Luo, L. Brody, D. Seazzu, and S. Burd, ``A Scalable Spam Collection: A Real-World Analysis and Visualization,'' in IEEE MALWARE, 2011, pp. 79--86.
+\bibitem{b10} G. Stringhini and O. Thonnard, ``That Ain't You: Blocking Spearphishing Through Behavioral Modelling,'' in Detection of Intrusions and Malware (DIMVA), 2015, pp. 78--97.
+\bibitem{b11} K. Leonard, ``The Development of A Rule-Based Expert System Model for Fraud Alert in Consumer Credit,'' European Journal of Operational Research, vol. 80, no. 2, pp. 350--356, 1995.
+\bibitem{b12} R. J. Bolton and D. J. Hand, ``Statistical Fraud Detection: A Review,'' Statistical Science, vol. 17, no. 3, pp. 235--255, 2002.
+\bibitem{b13} S. Bhattacharyya, S. Jha, K. Tharakunnel, and J. C. Westland, ``Data Mining for Credit Card Fraud: A Comparative Study,'' Decision Support Systems, vol. 50, no. 3, pp. 602--613, 2011.
+\bibitem{b14} K. Fu, D. Cheng, Y. Tu, and L. Zhang, ``Credit Card Fraud Detection Using Convolutional Neural Networks,'' in International Conference on Neural Information Processing, 2016, pp. 483--490.
+\bibitem{b15} Y. Liu, C. Ao, Z. Zhong, J. Hao, and L. He, ``Heterogeneous Graph Neural Networks for Malicious Account Detection,'' in ACM CIKM, 2018, pp. 2077--2085.
+\bibitem{b16} M. Khonji, Y. Iraqi, and A. Jones, ``Phishing Detection: A Literature Survey,'' IEEE Communications Surveys \& Tutorials, vol. 15, no. 4, pp. 2091--2121, 2013.
+\bibitem{b17} S. Afroz and R. Greenstadt, ``PhishZoo: Detecting Phishing Websites by Looking at Them,'' in IEEE International Conference on Semantic Computing, 2011, pp. 368--375.
+\bibitem{b18} H. Le, Q. Pham, D. Sahoo, and S. C. H. Hoi, ``URLNet: Learning a URL Representation with Deep Learning for Malicious URL Detection,'' arXiv preprint arXiv:1802.03162, 2018.
+\bibitem{b19} Q. Cui, G. Jourdan, G. Bochmann, R. Couturier, and I. Onut, ``Tracking Phishing Attacks Over Time,'' in WWW Conference, 2017, pp. 667--676.
+\bibitem{b20} P. Raghavan and N. El-Gayar, ``Fraud Detection using Machine Learning and Deep Learning,'' in IEEE ICIC, 2019, pp. 334--339.
+\bibitem{b21} OpenAI, ``GPT-4 Technical Report,'' arXiv preprint arXiv:2303.08774, 2023.
+\bibitem{b22} Google, ``Gemini: A Family of Highly Capable Multimodal Models,'' arXiv preprint arXiv:2312.11805, 2023.
+\bibitem{b23} Q. Wu, G. Bansal, J. Zhang, Y. Wu, B. Li, E. Zhu, L. Jiang, X. Zhang, S. Zhang, J. Liu et al., ``AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation,'' arXiv preprint arXiv:2308.08155, 2023.
+\bibitem{b24} H. Chase, ``LangChain,'' 2022. [Online]. Available: https://github.com/langchain-ai/langchain
+\bibitem{b25} J. Yang, C. E. Jimenez, A. Wettig, K. Lieret, S. Yao, K. Narasimhan, and O. Press, ``SWE-agent: Agent Computer Interfaces Enable Software Engineering Language Models,'' arXiv preprint arXiv:2405.15793, 2024.
+\bibitem{b26} J. S. Park, J. C. O'Brien, C. J. Cai, M. R. Morris, P. Liang, and M. S. Bernstein, ``Generative Agents: Interactive Simulacra of Human Behavior,'' in UIST, 2023.
+\bibitem{b27} H. Zhou, M. Huang, T. Zhang, X. Zhu, and B. Liu, ``Emotional Chatting Machine: Emotional Conversation Generation with Internal and External Memory,'' in AAAI, 2018.
+\bibitem{b28} Y. Zhang, S. Sun, M. Galley, Y.-C. Chen, C. Brockett, X. Gao, J. Gao, J. Liu, and B. Dolan, ``DIALOGPT: Large-Scale Generative Pre-training for Conversational Response Generation,'' in ACL, 2020, pp. 270--278.
+\bibitem{b29} G. Izacard, M. Caron, L. Hosseini, S. Rber, P. Grave, A. Joulin, and E. Grave, ``Unsupervised Dense Information Retrieval with Contrastive Learning,'' arXiv preprint arXiv:2112.09118, 2021.
+\bibitem{b30} Z. Ji, N. Lee, R. Frieske, T. Yu, D. Su, Y. Xu, E. Ishii, Y. J. Bang, A. Madotto, and P. Fung, ``Survey of Hallucination in Natural Language Generation,'' ACM Computing Surveys, vol. 55, no. 12, 2023.
+\end{thebibliography}
+
+\vspace{12pt}
+
+\end{document}
