@@ -82,8 +82,8 @@ Persist session ──► Callbacks at final turn ──► JSON reply
 ## Quick start
 
 ```bash
-git clone https://github.com/The-Eco-Guy/honey_we_trapped_the_scammers_guvi_finals.git
-cd honey_we_trapped_the_scammers_guvi_finals
+git clone https://github.com/shreyasbs31/Microsoft_Hackathon_with_Frontend.git
+cd Microsoft_Hackathon_with_Frontend
 
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
