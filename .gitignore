@@ -30,3 +30,25 @@ Thumbs.db
 venv/
 .venv/
 env/
+
+# Node (frontend)
+node_modules/
+
+# Testing / coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# Logs
+*.log
+
+# LaTeX auxiliary output (paper/)
+paper/**/*.aux
+paper/**/*.dvi
+paper/**/*.fdb_latexmk
+paper/**/*.fls
+paper/**/*.out
+paper/**/*.synctex.gz

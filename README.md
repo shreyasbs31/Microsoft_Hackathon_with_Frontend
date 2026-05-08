@@ -1,83 +1,173 @@
-# Honeypot Scam Detection API
+# Operation Rat-Trap — Agentic Honeypot API
 
-## Description
+A production-oriented **FastAPI** service that engages suspected scammers in multi-turn dialogue, classifies conversations with an **LLM analyst**, generates believable replies through a **dual-layer persona**, harvests **structured intelligence** (phones, UPI IDs, bank details, URLs, and more) with regex and optional LLM-assisted extraction, and reports outcomes to **GUVI** evaluation callbacks. A **React** dashboard (optional) builds into `static/` and is served by the same application.
 
-An AI-powered agentic honeypot system that detects scam messages, engages scammers in multi-turn conversations using a dual-layer persona (CBI strategist undercover as a high-value target), extracts actionable intelligence, and reports results to the GUVI evaluation platform.
+For an extended platform and design specification, see **[`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md)**. For publication materials, see the **`paper/`** directory (IEEE LaTeX and figure-generation scripts).
 
-## Tech Stack
+---
 
-- **Language**: Python 3.11+
-- **Framework**: FastAPI + Uvicorn
-- **Database**: SQLite (via SQLAlchemy ORM)
-- **LLM (Primary)**: Google Gemini 2.5 Flash (analyst/classification) + Gemini 2.5 Pro (persona/response generation)
-- **LLM (Fallback)**: OpenAI GPT-4o-mini (analyst) + GPT-4o (persona)
-- **HTTP Client**: httpx (async callbacks)
+## Capabilities
+
+| Area | Description |
+|------|-------------|
+| **Classification** | Analyst LLM labels each session `NEUTRAL`, `HONEYPOT`, or `LEGIT` when not yet decided; thresholds are configurable. |
+| **Persona** | Hidden strategist layer drives a visible “high-value target” persona; prompts adapt to which intelligence fields still need harvest. |
+| **Extraction** | Regex and merge logic for Indian UPI/banking patterns, URLs, IFSC, email, and optional LLM extraction pass. |
+| **Translation** | Conditional translation to English when metadata or content indicates non-English input. |
+| **Concurrency** | Async FastAPI with a **per-session async lock** so turns for one session are serialized. |
+| **Callbacks** | At the configured maximum turn, results are POSTed to GUVI callback endpoints (see `src/callback.py`). |
+
+---
 
 ## Architecture
 
+High-level request flow (evaluator or custom client):
+
+```text
+┌─────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│   Client    │───▶│  x-api-key check │───▶│  Session lock       │
+└─────────────┘    └──────────────────┘    └──────────┬──────────┘
+                                                     │
+   ┌─────────────────────────────────────────────────┘
+   ▼
+Normalise text ──► Regex / LLM intel ──► Merge into session
+   ▼
+Translation (if needed) ──► Analyst (if NEUTRAL) ──► Persona reply
+   ▼
+Persist session ──► Callbacks at final turn ──► JSON reply
 ```
-Incoming Message → API Key Validation → Per-Session Lock
-    → Normalise Text → Regex Intelligence Extraction
-    → Merge Intel with Session → Conditional Translation
-    → Conditional Analyst LLM (if NEUTRAL) → Persona LLM Response
-    → Update Session DB → Fire Callbacks (at turn 10)
-    → Return Reply
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|------------|
+| Runtime | Python **3.11+** |
+| API | **FastAPI**, **Uvicorn** (single worker recommended for per-session locks) |
+| Persistence | **SQLAlchemy 2** — default **`sqlite:///./honeypot.db`**; **PostgreSQL** supported (e.g. Railway) via `DATABASE_URL`; **MySQL** possible via `DATABASE_URL` and `pymysql` |
+| Primary LLMs | **Google Gemini** (role-specific model names from environment) |
+| Fallback LLMs | **Groq** (e.g. Llama 3.3) when Gemini fails |
+| HTTP | **httpx** for async outbound callbacks |
+| Dashboard | **React** + **Vite** → static assets under `static/` |
+
+### Source layout
+
+| Path | Role |
+|------|------|
+| `src/main.py` | FastAPI app, routes, static mount, pipeline orchestration |
+| `src/config.py` | Environment-driven configuration |
+| `src/models.py` | ORM models and DB session factory |
+| `src/analyst.py` | Scam / legitimacy classification |
+| `src/persona.py` | Dual-layer persona and reply generation |
+| `src/extractor.py` | Intelligence extraction and merging |
+| `src/translator.py` | Translation helpers |
+| `src/llm_client.py` | Gemini with Groq fallback |
+| `src/callback.py` | GUVI and secondary callback delivery |
+| `src/session_lock.py` | Per-session `asyncio` locks |
+| `frontend/` | React UI; `npm run build` → `../static/` |
+| `static/` | Built frontend and assets (served at `/static`, `/`) |
+| `render.yaml` / `railway.toml` | Example cloud deployment configuration |
+
+---
+
+## Prerequisites
+
+- Python 3.11 or newer  
+- API keys: **Gemini** (required for primary path), **Groq** (recommended for resilience)  
+- For the UI: **Node.js 18+** and npm
+
+---
+
+## Quick start
+
+```bash
+git clone https://github.com/The-Eco-Guy/honey_we_trapped_the_scammers_guvi_finals.git
+cd honey_we_trapped_the_scammers_guvi_finals
+
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env — set at least GEMINI_API_KEY and API_KEY
 ```
 
-### Key Components
+Run the API:
 
-| Module | Purpose |
-|--------|---------|
-| `src/main.py` | FastAPI app, request pipeline orchestration |
-| `src/models.py` | SQLAlchemy ORM, session state schema |
-| `src/analyst.py` | Scam classification LLM (NEUTRAL/HONEYPOT/LEGIT) |
-| `src/persona.py` | Dual-layer persona agent with dynamic extraction priorities |
-| `src/extractor.py` | Regex-based intelligence extraction (phones, accounts, UPI, URLs, emails, IFSC) |
-| `src/translator.py` | Conditional non-English → English translation |
-| `src/callback.py` | Final result callback to two GUVI endpoints |
-| `src/llm_client.py` | LLM abstraction with Gemini → OpenAI fallback |
-| `src/session_lock.py` | Per-session async locks for turn serialisation |
-| `src/config.py` | Environment variables and constants |
+```bash
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1
+```
 
-## Setup Instructions
+Or use the helper script (installs dependencies, then starts Uvicorn):
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/The-Eco-Guy/honey_we_trapped_the_scammers_guvi_finals.git
-   cd honey_we_trapped_the_scammers_guvi_finals
-   ```
+```bash
+chmod +x start.sh
+./start.sh
+```
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+- **Interactive docs:** [http://localhost:8000/docs](http://localhost:8000/docs)  
+- **Health:** `GET /health` — returns JSON with `status` and timestamp  
+- **Root `/`:** serves `static/index.html` when the frontend is built; otherwise redirects to `/docs`
 
-3. **Set environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your actual API keys
-   ```
+---
 
-4. **Run the application**
-   ```bash
-   uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1
-   ```
+## Configuration
 
-## API Endpoint
+Copy `.env.example` to `.env` and set secrets **never committed to git**.
 
-- **URL**: `https://your-deployed-url.com/honeypot`
-- **Method**: POST
-- **Authentication**: `x-api-key` header
-- **Health Check**: `GET /health`
+| Variable | Purpose |
+|----------|---------|
+| `API_KEY` | Shared secret; clients must send header `x-api-key: <value>` on protected routes |
+| `GEMINI_API_KEY` | Primary Gemini key; optional `GEMINI_API_KEY_2` … `_5` for rotation |
+| `GEMINI_*_MODEL` | Model names for analyst, persona, translator, extractor |
+| `GROQ_API_KEY` | Fallback provider |
+| `GROQ_*_MODEL` | Groq model names for analyst / persona |
+| `DATABASE_URL` | Empty or unset → SQLite file `honeypot.db`; set to Postgres/MySQL URL in production |
+| `GUVI_CALLBACK_URL_1`, `GUVI_CALLBACK_URL_2` | Override callback destinations (defaults exist in `config.py`) |
+| `MAX_TURNS` | Turn count before callback firing (default `10`) |
+| `LLM_TIMEOUT_SECONDS`, `CALLBACK_TIMEOUT_SECONDS` | Network and LLM timeouts |
+| `HONEYPOT_CONFIDENCE_THRESHOLD`, `LEGIT_CONFIDENCE_THRESHOLD` | Analyst decision bounds |
 
-### Request Format
+See `src/config.py` for defaults and Railway/Postgres URL normalization.
+
+---
+
+## HTTP API
+
+### Authentication
+
+Routes other than the public and frontend prefixes require **`x-api-key`** matching `API_KEY`.
+
+**Public (no API key):** `/`, `/health`, `/docs`, `/redoc`, `/openapi.json`, `/favicon.ico`  
+**Frontend / static (no API key):** paths under `/static`, `/api/chat`, `/api/session`…  
+
+**Protected:** `POST /honeypot`, `POST /api/message`, and other non-listed routes.
+
+### Main integration endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/honeypot` | Primary evaluator-shaped payload; returns `{ "status": "success", "reply": "..." }` |
+| `POST` | `/api/message` | Alias for `/honeypot` (GUVI platform) |
+| `GET` | `/health` | Liveness / health JSON |
+
+### Dashboard helpers (unauthenticated)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/chat` | Chat-style JSON; returns reply plus session snapshot |
+| `GET` | `/api/session/{session_id}` | Current session and extracted intelligence |
+| `GET` | `/api/session/{session_id}/results` | Final-style payload when available |
+
+### Example — honeypot request
 
 ```json
 {
-  "sessionId": "uuid-string",
+  "sessionId": "550e8400-e29b-41d4-a716-446655440000",
   "message": {
     "sender": "scammer",
-    "text": "Your account has been compromised...",
+    "text": "Your account will be debited unless you verify now.",
     "timestamp": 1770005528731
   },
   "conversationHistory": [],
@@ -89,38 +179,58 @@ Incoming Message → API Key Validation → Per-Session Lock
 }
 ```
 
-### Response Format
-
-```json
-{
-  "status": "success",
-  "reply": "Oh dear, that's concerning. Can you tell me which branch this is from?"
-}
+```http
+POST /honeypot HTTP/1.1
+Host: your-host
+Content-Type: application/json
+x-api-key: your-api-key
 ```
 
-## Approach
+---
 
-### How We Detect Scams
-- **Analyst LLM** (Gemini 2.5 Flash) classifies conversations as NEUTRAL, HONEYPOT, or LEGIT
-- Runs conditionally — only when status is NEUTRAL (not yet classified)
-- Confidence thresholds: HONEYPOT > 0.5, LEGIT > 0.8
-- Regex extraction runs on every turn to capture intelligence from scammer messages
+## Frontend (optional)
 
-### How We Extract Intelligence
-- **Regex patterns** for: phone numbers, bank accounts, UPI IDs, URLs, emails, IFSC codes
-- Contextual bank account matching (only near banking keywords)
-- UPI ID detection with 30+ known Indian UPI suffixes
-- Intelligence accumulates across turns with deduplication
+Build the React app into `static/` so `/` serves the dashboard:
 
-### How We Maintain Engagement
-- **Dual-layer persona**: CBI intelligence strategist (hidden) controlling a high-value target persona (visible)
-- Dynamic f-string prompts with extraction counts drive conversation strategy
-- Priority shifts to fields with 0 extractions, then to fields with lowest counts
-- Anti-repetition: last approach summary passed to prompt to prevent repeating tactics
-- No hardcoded phases or bait types — fully LLM-driven adaptive behaviour
-- Fallback replies if LLM fails, maintaining engagement without breaking
+```bash
+cd frontend
+npm ci
+npm run build
+```
 
-### Concurrency Model
-- Multiple sessions handled concurrently (async FastAPI)
-- Per-session `asyncio.Lock` ensures turns within a session are processed sequentially
-- Single uvicorn worker to ensure lock consistency
+`vite.config.js` sets `outDir` to `../static` and `base` to `/static/`. In development, `npm run dev` proxies `/api` to `http://localhost:8000`.
+
+---
+
+## Deployment
+
+- **Render:** `render.yaml` defines a Python web service and optional managed database; set `API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, and wire `DATABASE_URL` as in that file.  
+- **Railway:** `railway.toml` supplies start command and health check; inject the same secrets and `DATABASE_URL` when using Postgres.
+
+Use **`--workers 1`** in production so per-session locks remain process-local and consistent.
+
+---
+
+## Documentation and research
+
+| Resource | Content |
+|----------|---------|
+| [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) | Expanded architecture, layers, and design narrative |
+| `paper/Operation_RatTrap_IEEE_Paper.tex` | IEEE-formatted manuscript |
+| `paper/figures/` | Figures and `generate_figure*.py` scripts |
+
+---
+
+## Security notes
+
+- Treat `API_KEY` as a secret; rotate if leaked.  
+- Do not commit `.env` or live database files with real session data.  
+- Callback URLs should use HTTPS in production.
+
+---
+
+## Operational notes
+
+- **Single worker:** Multiple Uvicorn workers duplicate in-memory locks; use one worker, or move to a distributed lock if you scale horizontally.  
+- **SQLite:** Suitable for development and light loads; use PostgreSQL for concurrent production write load.  
+- **Evaluator alignment:** Ensure `API_KEY` matches what the hackathon or staging environment expects.
